@@ -1,22 +1,23 @@
-// YouTube Uploader — Step 1: prove OAuth + a private test upload.
-// Single-channel personal tool. Holds the refresh token in memory,
-// seeded from YT_REFRESH_TOKEN so authorization survives restarts once set.
+// YouTube Uploader — Step 2: browser -> R2 (direct) -> background R2 -> YouTube.
+// Single-channel personal tool. Refresh token held in memory, seeded from
+// YT_REFRESH_TOKEN so authorization survives restarts once set.
 
 import express from "express";
-import multer from "multer";
-import fs from "node:fs";
-import os from "node:os";
+import crypto from "node:crypto";
 import path from "node:path";
+import { Transform } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { google } from "googleapis";
+import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const APP_VERSION = "0.02";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 
-// Render sets RENDER_EXTERNAL_URL automatically. BASE_URL lets you override.
 const BASE_URL = (
   process.env.BASE_URL ||
   process.env.RENDER_EXTERNAL_URL ||
@@ -24,11 +25,33 @@ const BASE_URL = (
 ).replace(/\/$/, "");
 const REDIRECT_URI = `${BASE_URL}/oauth2callback`;
 
-// Only scope needed to upload. The insert response itself reports privacy
-// status, so no extra read scope is required to confirm the gate.
 const SCOPES = ["https://www.googleapis.com/auth/youtube.upload"];
 
+// --- R2 (S3-compatible) ---
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+const R2_BUCKET = process.env.R2_BUCKET;
+const r2Configured = Boolean(
+  R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET
+);
+
+const s3 = r2Configured
+  ? new S3Client({
+      region: "auto",
+      endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
+      },
+    })
+  : null;
+
 let refreshToken = process.env.YT_REFRESH_TOKEN || null;
+
+// In-memory transfer jobs (single-user tool; master lives safely in R2, so a
+// lost job just means re-running the transfer — no re-upload).
+const jobs = new Map();
 
 function oauthClient() {
   return new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
@@ -40,11 +63,60 @@ function escapeHtml(s) {
   ));
 }
 
+function safeName(name) {
+  return String(name || "video")
+    .replace(/[^a-zA-Z0-9._-]+/g, "_")
+    .slice(0, 80);
+}
+
+// Background transfer: stream the object from R2 straight into a YouTube
+// resumable upload. Bytes never sit on Render disk; memory stays flat.
+async function transferToYouTube(jobId, key, title, description) {
+  const job = jobs.get(jobId);
+  try {
+    job.state = "fetching";
+    const obj = await s3.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+    job.total = Number(obj.ContentLength || 0);
+
+    const counter = new Transform({
+      transform(chunk, _enc, cb) {
+        job.bytesSent += chunk.length;
+        cb(null, chunk);
+      },
+    });
+    obj.Body.pipe(counter);
+
+    job.state = "uploading";
+    const auth = oauthClient();
+    auth.setCredentials({ refresh_token: refreshToken });
+    const youtube = google.youtube({ version: "v3", auth });
+
+    const result = await youtube.videos.insert({
+      part: ["snippet", "status"],
+      requestBody: {
+        snippet: { title, description, categoryId: "1" }, // 1 = Film & Animation
+        status: { privacyStatus: "private", selfDeclaredMadeForKids: false },
+      },
+      media: { body: counter },
+    });
+
+    const v = result.data;
+    job.state = "done";
+    job.videoId = v.id;
+    job.privacyStatus = v.status?.privacyStatus;
+    job.uploadStatus = v.status?.uploadStatus;
+    job.watchUrl = `https://youtu.be/${v.id}`;
+    job.studioUrl = `https://studio.youtube.com/video/${v.id}/edit`;
+  } catch (err) {
+    const reason = err?.errors?.[0]?.reason;
+    const msg = err?.response?.data?.error?.message || err?.message || String(err);
+    job.state = "error";
+    job.error = reason ? `${reason}: ${msg}` : msg;
+  }
+}
+
 const app = express();
-const upload = multer({
-  dest: os.tmpdir(),
-  limits: { fileSize: 1024 * 1024 * 1024 }, // 1 GB cap (keep the test clip small)
-});
+app.use(express.json());
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
@@ -54,6 +126,7 @@ app.get("/api/status", (req, res) => {
   res.json({
     configured: Boolean(CLIENT_ID && CLIENT_SECRET),
     authorized: Boolean(refreshToken),
+    r2Configured,
     redirectUri: REDIRECT_URI,
   });
 });
@@ -62,11 +135,11 @@ app.get("/auth", (req, res) => {
   if (!CLIENT_ID || !CLIENT_SECRET) {
     return res
       .status(500)
-      .send("Missing CLIENT_ID / CLIENT_SECRET. Set them in Render → Environment.");
+      .send("Missing CLIENT_ID / CLIENT_SECRET. Set them in Render -> Environment.");
   }
   const url = oauthClient().generateAuthUrl({
     access_type: "offline",
-    prompt: "consent", // forces a refresh_token back every time
+    prompt: "consent",
     scope: SCOPES,
   });
   res.redirect(url);
@@ -80,7 +153,7 @@ app.get("/oauth2callback", async (req, res) => {
     if (tokens.refresh_token) refreshToken = tokens.refresh_token;
     const token = refreshToken
       ? escapeHtml(refreshToken)
-      : "(no refresh token returned — revoke this app at myaccount.google.com/permissions and re-authorize)";
+      : "(no refresh token returned - revoke this app at myaccount.google.com/permissions and re-authorize)";
     res.send(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -98,8 +171,8 @@ app.get("/oauth2callback", async (req, res) => {
 </style></head>
 <body><div class="card">
   <h1>✅ Authorized</h1>
-  <p>You can go back and upload a test video now. To make this permanent (so you never click Authorize again):</p>
-  <p class="muted">1. Copy the refresh token below. 2. In Render → your service → <b>Environment</b>, add <b>YT_REFRESH_TOKEN</b> with this value. 3. Save (Render redeploys). Keep it secret — it grants upload access to your channel.</p>
+  <p>You can go back and upload now. To make this permanent (so you never click Authorize again):</p>
+  <p class="muted">1. Copy the refresh token below. 2. In Render -> your service -> <b>Environment</b>, add <b>YT_REFRESH_TOKEN</b> with this value. 3. Save (Render redeploys). Keep it secret - it grants upload access to your channel.</p>
   <code id="tok">${token}</code>
   <button onclick="navigator.clipboard.writeText(document.getElementById('tok').textContent).then(()=>{this.textContent='Copied'})">Copy token</button>
   &nbsp;<a class="btn" href="/">Back to uploader</a>
@@ -109,49 +182,54 @@ app.get("/oauth2callback", async (req, res) => {
   }
 });
 
-app.post("/api/upload", upload.single("video"), async (req, res) => {
-  if (!refreshToken) {
-    return res.status(401).json({ error: "Not authorized yet — click Authorize first." });
-  }
-  if (!req.file) return res.status(400).json({ error: "No file received." });
+// Step A: hand the browser a signed URL to upload the master straight to R2.
+app.post("/api/presign", async (req, res) => {
+  if (!r2Configured) return res.status(500).json({ error: "R2 not configured (set R2_* env vars)." });
+  if (!refreshToken) return res.status(401).json({ error: "Not authorized yet - click Authorize first." });
+  const { filename, contentType, size } = req.body || {};
+  if (!filename) return res.status(400).json({ error: "Missing filename." });
 
-  const tmpPath = req.file.path;
+  const ct = contentType || "application/octet-stream";
+  const key = `uploads/${Date.now()}-${crypto.randomBytes(3).toString("hex")}-${safeName(filename)}`;
   try {
-    const auth = oauthClient();
-    auth.setCredentials({ refresh_token: refreshToken });
-    const youtube = google.youtube({ version: "v3", auth });
-
-    const title = (req.body.title || "API test upload").slice(0, 100);
-    const description =
-      req.body.description || "Test upload via the YouTube Data API.";
-
-    const result = await youtube.videos.insert({
-      part: ["snippet", "status"],
-      requestBody: {
-        snippet: { title, description, categoryId: "1" }, // 1 = Film & Animation
-        status: { privacyStatus: "private", selfDeclaredMadeForKids: false },
-      },
-      media: { body: fs.createReadStream(tmpPath) },
-    });
-
-    const v = result.data;
-    res.json({
-      id: v.id,
-      privacyStatus: v.status?.privacyStatus,
-      uploadStatus: v.status?.uploadStatus,
-      watchUrl: `https://youtu.be/${v.id}`,
-      studioUrl: `https://studio.youtube.com/video/${v.id}/edit`,
-    });
+    const url = await getSignedUrl(
+      s3,
+      new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, ContentType: ct }),
+      { expiresIn: 3600 }
+    );
+    res.json({ key, url, contentType: ct, size: size || 0 });
   } catch (err) {
-    const reason = err?.errors?.[0]?.reason;
-    const msg = err?.response?.data?.error?.message || err?.message || String(err);
-    res.status(500).json({ error: reason ? `${reason}: ${msg}` : msg });
-  } finally {
-    fs.unlink(tmpPath, () => {});
+    res.status(500).json({ error: err?.message || String(err) });
   }
 });
 
+// Step B: kick off the background R2 -> YouTube transfer, return immediately.
+app.post("/api/transfer", (req, res) => {
+  if (!r2Configured) return res.status(500).json({ error: "R2 not configured." });
+  if (!refreshToken) return res.status(401).json({ error: "Not authorized yet." });
+  const { key, title, description } = req.body || {};
+  if (!key) return res.status(400).json({ error: "Missing key." });
+
+  const jobId = crypto.randomUUID();
+  jobs.set(jobId, { state: "starting", key, bytesSent: 0, total: 0, createdAt: Date.now() });
+  transferToYouTube(
+    jobId,
+    key,
+    (title || "API upload").slice(0, 100),
+    description || "Uploaded via the YouTube Data API."
+  );
+  res.json({ jobId });
+});
+
+// Step C: the browser polls this for transfer progress + result.
+app.get("/api/transfer/:jobId", (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: "Unknown job." });
+  res.json(job);
+});
+
 app.listen(PORT, () => {
-  console.log(`YouTube uploader (test) listening on ${BASE_URL}`);
+  console.log(`YouTube uploader v${APP_VERSION} listening on ${BASE_URL}`);
   console.log(`Redirect URI to register in Google Cloud: ${REDIRECT_URI}`);
+  console.log(`R2 configured: ${r2Configured}`);
 });

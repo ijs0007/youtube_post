@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YouTube Uploader — API Test</title>
+  <title>YouTube Uploader</title>
   <style>
     :root { --accent:#2f80ff; --ink:#1d1d1f; --muted:#86868b; --line:#e6e6eb; }
     * { box-sizing:border-box; }
@@ -29,32 +29,36 @@
       border-radius:11px; background:#fafafc; margin-bottom:16px;
     }
     input[type=file] { padding:9px 12px; }
-    button, a.btn {
+    button {
       display:inline-block; font:inherit; font-weight:600; border:0; cursor:pointer;
       background:var(--accent); color:#fff; padding:12px 18px; border-radius:12px;
-      text-decoration:none; transition:opacity .15s;
+      width:100%; transition:opacity .15s;
     }
     button:disabled { opacity:.5; cursor:default; }
-    button.full { width:100%; }
+    a.btn { display:inline-block; background:var(--accent); color:#fff; text-decoration:none; padding:11px 18px; border-radius:11px; font-weight:600; }
     .hint { font-size:13px; color:var(--muted); margin:10px 0 0; }
-    .result { display:none; font-size:14px; }
+    .progress { display:none; margin-top:18px; }
+    .progress.show { display:block; }
+    .pbar-label { display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-bottom:6px; }
+    .pbar { height:8px; background:#e8e8ed; border-radius:99px; overflow:hidden; }
+    .pbar > span { display:block; height:100%; width:0%; background:var(--accent); border-radius:99px; transition:width .3s; }
+    .pbar.indet > span { width:40%; animation:slide 1.1s ease-in-out infinite; }
+    @keyframes slide { 0%{margin-left:-40%} 100%{margin-left:100%} }
+    .result { display:none; font-size:14px; margin-top:18px; }
     .result.show { display:block; }
     .row { display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid var(--line); }
     .row:last-child { border-bottom:0; }
     .row b { font-weight:600; }
-    .badge { font-weight:700; }
-    .badge.private { color:#34c759; }
+    .badge.private { color:#34c759; font-weight:700; }
     .err { color:#ff3b30; font-weight:600; }
     .links a { color:var(--accent); text-decoration:none; }
     .foot { text-align:center; color:#b0b0b8; font-size:12px; margin-top:18px; }
-    .spinner { display:inline-block; width:15px; height:15px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px; margin-right:7px; }
-    @keyframes spin { to { transform:rotate(360deg); } }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>YouTube Uploader</h1>
-    <p class="sub">Step 1 — prove the API upload and confirm the private-landing gate.</p>
+    <p class="sub">Step 2 — master goes browser → R2 → YouTube, around Render.</p>
 
     <div class="card">
       <div class="status"><span id="dot" class="dot"></span><span id="statusText">Checking status…</span></div>
@@ -66,18 +70,26 @@
 
     <div class="card">
       <label for="title">Title (optional)</label>
-      <input type="text" id="title" placeholder="API test upload">
-      <label for="video">Video file — use a short, small clip for this test</label>
+      <input type="text" id="title" placeholder="My film">
+      <label for="video">Video file — up to 5GB this build</label>
       <input type="file" id="video" accept="video/*">
-      <button id="uploadBtn" class="full" disabled>Upload as private test</button>
-      <p class="hint">Large/multi-GB masters come in step 2 (resumable + R2). Keep this one small so it sails through quickly.</p>
+      <button id="uploadBtn" disabled>Upload</button>
+      <p class="hint" id="hint">Uploads straight to R2 (skips Render), then transfers to YouTube as a private video.</p>
 
-      <div id="result" class="result" style="margin-top:18px;">
-        <div id="resultBody"></div>
+      <div id="prog1" class="progress">
+        <div class="pbar-label"><span>Uploading to R2</span><span id="p1pct">0%</span></div>
+        <div class="pbar"><span id="p1bar"></span></div>
       </div>
+
+      <div id="prog2" class="progress">
+        <div class="pbar-label"><span id="p2label">Sending to YouTube</span><span id="p2pct"></span></div>
+        <div class="pbar" id="p2wrap"><span id="p2bar"></span></div>
+      </div>
+
+      <div id="result" class="result"><div id="resultBody"></div></div>
     </div>
 
-    <div class="foot">v0.01 — step 1 test build</div>
+    <div class="foot">v0.02 — step 2</div>
   </div>
 
   <script>
@@ -86,27 +98,35 @@
     const authBlock = document.getElementById('authBlock');
     const uploadBtn = document.getElementById('uploadBtn');
     const fileInput = document.getElementById('video');
+    const prog1 = document.getElementById('prog1');
+    const prog2 = document.getElementById('prog2');
+    const p1bar = document.getElementById('p1bar');
+    const p1pct = document.getElementById('p1pct');
+    const p2bar = document.getElementById('p2bar');
+    const p2pct = document.getElementById('p2pct');
+    const p2wrap = document.getElementById('p2wrap');
+    const p2label = document.getElementById('p2label');
     const result = document.getElementById('result');
     const resultBody = document.getElementById('resultBody');
-    let authorized = false;
+    let ready = false;
 
     async function refreshStatus() {
       try {
-        const r = await fetch('/api/status');
-        const s = await r.json();
+        const s = await (await fetch('/api/status')).json();
         if (!s.configured) {
           dot.className = 'dot warn';
-          statusText.textContent = 'Missing credentials — set CLIENT_ID / CLIENT_SECRET in Render.';
-          authBlock.style.display = 'none';
-        } else if (s.authorized) {
-          authorized = true;
-          dot.className = 'dot ok';
-          statusText.textContent = 'Authorized and ready.';
-          authBlock.style.display = 'none';
-        } else {
+          statusText.textContent = 'Missing YouTube credentials — set CLIENT_ID / CLIENT_SECRET in Render.';
+        } else if (!s.r2Configured) {
+          dot.className = 'dot warn';
+          statusText.textContent = 'YouTube ready, but R2 not configured — set the R2_* env vars in Render.';
+        } else if (!s.authorized) {
           dot.className = 'dot warn';
           statusText.textContent = 'Credentials set, not yet authorized.';
           authBlock.style.display = 'block';
+        } else {
+          ready = true;
+          dot.className = 'dot ok';
+          statusText.textContent = 'Authorized, R2 connected — ready.';
         }
       } catch (e) {
         dot.className = 'dot warn';
@@ -116,44 +136,111 @@
     }
 
     function updateBtn() {
-      uploadBtn.disabled = !(authorized && fileInput.files.length > 0);
+      uploadBtn.disabled = !(ready && fileInput.files.length > 0);
+    }
+    fileInput.addEventListener('change', () => { updateBtn(); });
+
+    function fmtBytes(n) {
+      if (!n) return '';
+      const u = ['B','KB','MB','GB']; let i = 0;
+      while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+      return n.toFixed(i ? 1 : 0) + ' ' + u[i];
     }
 
-    fileInput.addEventListener('change', updateBtn);
+    function putToR2(url, file, contentType) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url, true);
+        xhr.setRequestHeader('Content-Type', contentType);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            p1bar.style.width = pct + '%';
+            p1pct.textContent = pct + '%';
+          }
+        };
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error('R2 upload failed (HTTP ' + xhr.status + ')'));
+        xhr.onerror = () => reject(new Error('Network error during R2 upload'));
+        xhr.send(file);
+      });
+    }
+
+    function pollTransfer(jobId) {
+      return new Promise((resolve) => {
+        const tick = async () => {
+          try {
+            const job = await (await fetch('/api/transfer/' + jobId)).json();
+            if (job.state === 'uploading' && job.total) {
+              p2wrap.classList.remove('indet');
+              const pct = Math.round((job.bytesSent / job.total) * 100);
+              p2bar.style.width = pct + '%';
+              p2pct.textContent = pct + '%';
+              p2label.textContent = 'Sending to YouTube';
+            } else if (job.state === 'fetching' || job.state === 'starting' || job.state === 'uploading') {
+              p2wrap.classList.add('indet');
+              p2label.textContent = job.state === 'uploading' ? 'Sending to YouTube' : 'Preparing transfer';
+              p2pct.textContent = '';
+            }
+            if (job.state === 'done' || job.state === 'error') return resolve(job);
+          } catch (e) { /* keep polling */ }
+          setTimeout(tick, 1500);
+        };
+        tick();
+      });
+    }
 
     uploadBtn.addEventListener('click', async () => {
       if (!fileInput.files.length) return;
-      uploadBtn.disabled = true;
-      uploadBtn.innerHTML = '<span class="spinner"></span>Uploading…';
-      result.classList.remove('show');
-      resultBody.innerHTML = '';
+      const file = fileInput.files[0];
+      const contentType = file.type || 'application/octet-stream';
 
-      const fd = new FormData();
-      fd.append('video', fileInput.files[0]);
-      fd.append('title', document.getElementById('title').value || '');
+      uploadBtn.disabled = true;
+      result.classList.remove('show'); resultBody.innerHTML = '';
+      prog1.classList.add('show'); prog2.classList.remove('show');
+      p1bar.style.width = '0%'; p1pct.textContent = '0%';
 
       try {
-        const r = await fetch('/api/upload', { method:'POST', body: fd });
-        const data = await r.json();
-        if (!r.ok) {
-          resultBody.innerHTML = '<p class="err">Upload failed: ' + (data.error || 'unknown error') + '</p>';
+        // A: presign
+        const pres = await (await fetch('/api/presign', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, contentType, size: file.size })
+        })).json();
+        if (!pres.url) throw new Error(pres.error || 'Could not get upload URL');
+
+        // B: browser -> R2
+        await putToR2(pres.url, file, contentType);
+        p1bar.style.width = '100%'; p1pct.textContent = '100%';
+
+        // C: start R2 -> YouTube transfer
+        prog2.classList.add('show'); p2wrap.classList.add('indet');
+        const tr = await (await fetch('/api/transfer', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: pres.key, title: document.getElementById('title').value || '' })
+        })).json();
+        if (!tr.jobId) throw new Error(tr.error || 'Could not start transfer');
+
+        // D: poll
+        const job = await pollTransfer(tr.jobId);
+        p2wrap.classList.remove('indet');
+        if (job.state === 'error') {
+          resultBody.innerHTML = '<p class="err">Transfer failed: ' + (job.error || 'unknown') + '</p>';
         } else {
-          const priv = data.privacyStatus || 'unknown';
+          p2bar.style.width = '100%'; p2pct.textContent = '100%';
+          const priv = job.privacyStatus || 'unknown';
           resultBody.innerHTML =
-            '<div class="row"><span>Video ID</span><b>' + data.id + '</b></div>' +
+            '<div class="row"><span>Video ID</span><b>' + job.videoId + '</b></div>' +
             '<div class="row"><span>Privacy</span><span class="badge ' + (priv === 'private' ? 'private' : '') + '">' + priv + '</span></div>' +
-            '<div class="row"><span>Processing</span><b>' + (data.uploadStatus || '—') + '</b></div>' +
-            '<div class="row links"><span>Open in</span><span><a href="' + data.studioUrl + '" target="_blank">Studio</a> · <a href="' + data.watchUrl + '" target="_blank">Watch</a></span></div>' +
-            (priv === 'private'
-              ? '<p class="hint" style="margin-top:12px;">Landed as <b>private</b> — exactly the expected behavior for an un-audited project. The gate is confirmed.</p>'
-              : '');
+            '<div class="row"><span>Processing</span><b>' + (job.uploadStatus || '—') + '</b></div>' +
+            '<div class="row links"><span>Open in</span><span><a href="' + job.studioUrl + '" target="_blank">Studio</a> · <a href="' + job.watchUrl + '" target="_blank">Watch</a></span></div>';
         }
       } catch (e) {
-        resultBody.innerHTML = '<p class="err">Network error: ' + e.message + '</p>';
+        result.classList.add('show');
+        resultBody.innerHTML = '<p class="err">' + e.message + '</p>';
+        uploadBtn.disabled = false; updateBtn();
+        return;
       }
       result.classList.add('show');
-      uploadBtn.innerHTML = 'Upload as private test';
-      updateBtn();
+      uploadBtn.disabled = false; updateBtn();
     });
 
     refreshStatus();
