@@ -239,7 +239,7 @@
       </div>
     </div>
 
-    <div class="foot">v0.18 — step 3</div>
+    <div class="foot">v0.19 — step 3</div>
   </div>
 
   <script>
@@ -393,7 +393,8 @@
       try {
         const md = await generateMetadata(transcriptText, loglineInput.value || '');
         if (md.error) {
-          genStatus.innerHTML = '<span class="err">' + md.error + '</span>';
+          var hint = md.raw ? ' <span style="color:var(--muted)">[AI replied: ' + String(md.raw).slice(0, 140).split('<').join('&lt;') + '…]</span>' : '';
+          genStatus.innerHTML = '<span class="err">' + md.error + '</span>' + hint;
         } else {
           titleInput.value = md.title || '';
           descInput.value = md.description || '';
@@ -653,7 +654,7 @@
 
       pTlabel.textContent = 'Writing title & description';
       const md = await generateMetadata(job.transcript || '', loglineInput.value || '');
-      if (md.error) throw new Error(md.error);
+      if (md.error) throw new Error(md.error + (md.raw ? ' [AI replied: ' + String(md.raw).slice(0, 140) + '…]' : ''));
       titleInput.value = md.title || '';
       descInput.value = md.description || '';
       lastSynopsis = md.synopsis || ''; lastRawTitle = md.rawTitle || ''; lastChapters = md.chapters || '';
