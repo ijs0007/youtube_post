@@ -1,4 +1,5 @@
-// YouTube Uploader — Step 2: browser -> R2 (direct) -> background R2 -> YouTube.
+// YouTube Uploader — Step 3: browser -> R2 (direct) -> background R2 -> YouTube,
+// plus AI metadata (title/description/chapters) generated from a transcript.
 // Single-channel personal tool. Refresh token held in memory, seeded from
 // YT_REFRESH_TOKEN so authorization survives restarts once set.
 
@@ -13,10 +14,18 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_VERSION = "0.04";
+const APP_VERSION = "0.05";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
+
+// --- AI metadata (Anthropic) ---
+// One key, one model. Swap METADATA_MODEL to a stronger model (e.g.
+// "claude-opus-4-8") if you want max-quality titles; Sonnet is the
+// cost/speed default and is plenty for this.
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const METADATA_MODEL = "claude-sonnet-4-6";
+const aiConfigured = Boolean(ANTHROPIC_API_KEY);
 
 const BASE_URL = (
   process.env.BASE_URL ||
@@ -131,6 +140,7 @@ app.get("/api/status", (req, res) => {
     configured: Boolean(CLIENT_ID && CLIENT_SECRET),
     authorized: Boolean(refreshToken),
     r2Configured,
+    aiConfigured,
     redirectUri: REDIRECT_URI,
   });
 });
@@ -234,6 +244,97 @@ app.get("/api/transfer/:jobId", (req, res) => {
   res.json(job);
 });
 
+// AI metadata: turn a transcript (+ optional logline) into a YouTube title,
+// description, and — if the transcript carries timestamps — chapter markers.
+// Calls Anthropic directly with native fetch (no extra dependency).
+app.post("/api/metadata", async (req, res) => {
+  if (!aiConfigured) {
+    return res.status(500).json({ error: "AI not configured (set ANTHROPIC_API_KEY in Render)." });
+  }
+  const { transcript, logline, filename } = req.body || {};
+  const text = String(transcript || "").slice(0, 120000); // cap input size
+  const line = String(logline || "").slice(0, 500);
+  if (!text.trim() && !line.trim()) {
+    return res.status(400).json({ error: "Need a transcript or a logline to work from." });
+  }
+
+  const system = [
+    "You write YouTube metadata for an independent filmmaker's FICTIONAL narrative short films (channel: Isaiah Jeremiah).",
+    "You receive a transcript of one short film (it may include timestamps if exported as SRT/VTT, or be plain text with none) and possibly a one-line logline.",
+    "",
+    'Respond with a SINGLE JSON object with exactly two string fields: "title" and "description". No other keys.',
+    "",
+    "Rules:",
+    "- title: a compelling, human title for a narrative short film, under 100 characters. No clickbait, no emoji spam, no SEO keyword stuffing. It should read like a real film title.",
+    "- description: 1-3 short paragraphs describing the film in an engaging, spoiler-light way (set premise and tone; do not reveal the ending).",
+    '- CHAPTERS: ONLY if the transcript includes timestamps, append a blank line after the paragraphs, then chapter markers one per line in the format "M:SS Label" (use "H:MM:SS Label" for films over an hour). The FIRST chapter MUST be "0:00". Provide at least 3 chapters, each at least 10 seconds after the previous one, anchored to real shifts in the transcript (scene/beat changes). If the transcript has NO timestamps, do not invent chapters — omit them entirely.',
+    "- If the transcript is empty or nearly silent (little/no dialogue), rely on the logline. Do not fabricate plot or dialogue that the inputs don't support.",
+    "- Output ONLY the JSON object — no markdown code fences, no commentary before or after.",
+  ].join("\n");
+
+  const userContent = [
+    "Transcript:",
+    text.trim() || "(none provided)",
+    "",
+    "Logline (optional context): " + (line.trim() || "(none provided)"),
+    "Filename (optional hint): " + (String(filename || "").trim() || "(none)"),
+  ].join("\n");
+
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: METADATA_MODEL,
+        max_tokens: 1500,
+        system,
+        messages: [{ role: "user", content: userContent }],
+      }),
+    });
+
+    if (!r.ok) {
+      const errText = await r.text();
+      return res.status(502).json({ error: `AI request failed (HTTP ${r.status}): ${errText.slice(0, 300)}` });
+    }
+
+    const data = await r.json();
+    const raw = (data.content || [])
+      .filter((b) => b && b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+
+    // Robust extraction: pull the outermost {...} so stray fences/preamble
+    // can't break JSON.parse. String slicing only — clipboard-safe, no regex.
+    let jsonSlice = raw;
+    const open = jsonSlice.indexOf("{");
+    const close = jsonSlice.lastIndexOf("}");
+    if (open !== -1 && close !== -1 && close > open) {
+      jsonSlice = jsonSlice.slice(open, close + 1);
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonSlice);
+    } catch {
+      return res.status(502).json({ error: "AI returned unparseable output.", raw: raw.slice(0, 500) });
+    }
+
+    const title = String(parsed.title || "").slice(0, 100);
+    const description = String(parsed.description || "").slice(0, 4900); // < YouTube 5000 cap
+    if (!title && !description) {
+      return res.status(502).json({ error: "AI returned empty metadata." });
+    }
+    res.json({ title, description });
+  } catch (err) {
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
 // Diagnostic: write a tiny object to R2 from the server (bypasses the browser
 // + CORS entirely). If this succeeds, keys + bucket + permissions are good and
 // any upload failure is browser/CORS-side. If it fails, the error names why.
@@ -257,4 +358,5 @@ app.listen(PORT, () => {
   console.log(`YouTube uploader v${APP_VERSION} listening on ${BASE_URL}`);
   console.log(`Redirect URI to register in Google Cloud: ${REDIRECT_URI}`);
   console.log(`R2 configured: ${r2Configured}`);
+  console.log(`AI metadata configured: ${aiConfigured}`);
 });

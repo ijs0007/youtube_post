@@ -35,6 +35,13 @@
       width:100%; transition:opacity .15s;
     }
     button:disabled { opacity:.5; cursor:default; }
+    button.secondary { background:#eef1f6; color:var(--accent); }
+    textarea {
+      width:100%; font:inherit; padding:11px 12px; border:1px solid var(--line);
+      border-radius:11px; background:#fafafc; margin-bottom:16px;
+      min-height:130px; resize:vertical; line-height:1.5;
+    }
+    .genstatus { font-size:13px; margin:10px 0 16px; }
     a.btn { display:inline-block; background:var(--accent); color:#fff; text-decoration:none; padding:11px 18px; border-radius:11px; font-weight:600; }
     .hint { font-size:13px; color:var(--muted); margin:10px 0 0; }
     .progress { display:none; margin-top:18px; }
@@ -58,7 +65,7 @@
 <body>
   <div class="wrap">
     <h1>YouTube Uploader</h1>
-    <p class="sub">Step 2 — master goes browser → R2 → YouTube, around Render.</p>
+    <p class="sub">Step 3 — auto-writes the title, description & chapters, then browser → R2 → YouTube.</p>
 
     <div class="card">
       <div class="status"><span id="dot" class="dot"></span><span id="statusText">Checking status…</span></div>
@@ -69,10 +76,25 @@
     </div>
 
     <div class="card">
-      <label for="title">Title (optional)</label>
-      <input type="text" id="title" placeholder="My film">
       <label for="video">Video file — up to 5GB this build</label>
       <input type="file" id="video" accept="video/*">
+
+      <label for="transcript">Transcript (optional)</label>
+      <input type="file" id="transcript" accept=".srt,.vtt,.txt,text/plain">
+      <p class="hint" style="margin:-8px 0 16px">SRT or VTT gives you auto-chapters. Plain TXT works too — you'll just get title + description, no chapters.</p>
+
+      <label for="logline">Logline (optional)</label>
+      <input type="text" id="logline" placeholder="One line about the film — used if it has little dialogue">
+
+      <button id="genBtn" class="secondary" disabled>✨ Generate title &amp; description</button>
+      <p class="genstatus" id="genStatus"></p>
+
+      <label for="title">Title</label>
+      <input type="text" id="title" placeholder="My film">
+
+      <label for="description">Description</label>
+      <textarea id="description" placeholder="Description — chapter timestamps appear here when generated from a timed transcript."></textarea>
+
       <button id="uploadBtn" disabled>Upload</button>
       <p class="hint" id="hint">Uploads straight to R2 (skips Render), then transfers to YouTube as a private video.</p>
 
@@ -89,7 +111,7 @@
       <div id="result" class="result"><div id="resultBody"></div></div>
     </div>
 
-    <div class="foot">v0.04 — step 2</div>
+    <div class="foot">v0.05 — step 3</div>
   </div>
 
   <script>
@@ -108,11 +130,20 @@
     const p2label = document.getElementById('p2label');
     const result = document.getElementById('result');
     const resultBody = document.getElementById('resultBody');
+    const transcriptInput = document.getElementById('transcript');
+    const loglineInput = document.getElementById('logline');
+    const titleInput = document.getElementById('title');
+    const descInput = document.getElementById('description');
+    const genBtn = document.getElementById('genBtn');
+    const genStatus = document.getElementById('genStatus');
     let ready = false;
+    let aiReady = false;
+    let transcriptText = '';
 
     async function refreshStatus() {
       try {
         const s = await (await fetch('/api/status')).json();
+        aiReady = Boolean(s.aiConfigured);
         if (!s.configured) {
           dot.className = 'dot warn';
           statusText.textContent = 'Missing YouTube credentials — set CLIENT_ID / CLIENT_SECRET in Render.';
@@ -133,12 +164,68 @@
         statusText.textContent = 'Could not reach server.';
       }
       updateBtn();
+      renderAiNote();
+      updateGenBtn();
     }
 
     function updateBtn() {
       uploadBtn.disabled = !(ready && fileInput.files.length > 0);
     }
+
+    function updateGenBtn() {
+      const hasInput = transcriptText.trim().length > 0 || loglineInput.value.trim().length > 0;
+      genBtn.disabled = !(aiReady && hasInput);
+    }
+
+    function renderAiNote() {
+      if (!aiReady) {
+        genStatus.innerHTML = '<span style="color:#ff9500">AI metadata off — set ANTHROPIC_API_KEY in Render to switch it on. You can still upload manually.</span>';
+      } else if (genStatus.dataset.touched !== '1') {
+        genStatus.textContent = '';
+      }
+    }
+
     fileInput.addEventListener('change', () => { updateBtn(); });
+
+    transcriptInput.addEventListener('change', () => {
+      const f = transcriptInput.files[0];
+      if (!f) { transcriptText = ''; updateGenBtn(); return; }
+      const reader = new FileReader();
+      reader.onload = () => { transcriptText = reader.result || ''; updateGenBtn(); };
+      reader.onerror = () => { transcriptText = ''; updateGenBtn(); };
+      reader.readAsText(f);
+    });
+
+    loglineInput.addEventListener('input', updateGenBtn);
+
+    genBtn.addEventListener('click', async () => {
+      genBtn.disabled = true;
+      const orig = genBtn.textContent;
+      genBtn.textContent = 'Generating…';
+      genStatus.dataset.touched = '1';
+      genStatus.innerHTML = '<span style="color:var(--muted)">Reading your transcript and writing metadata…</span>';
+      try {
+        const md = await (await fetch('/api/metadata', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transcript: transcriptText,
+            logline: loglineInput.value || '',
+            filename: (fileInput.files[0] && fileInput.files[0].name) || ''
+          })
+        })).json();
+        if (md.error) {
+          genStatus.innerHTML = '<span class="err">' + md.error + '</span>';
+        } else {
+          titleInput.value = md.title || '';
+          descInput.value = md.description || '';
+          genStatus.innerHTML = '<span style="color:#34c759">Done — edit the title or description below before uploading.</span>';
+        }
+      } catch (e) {
+        genStatus.innerHTML = '<span class="err">' + e.message + '</span>';
+      }
+      genBtn.textContent = orig;
+      updateGenBtn();
+    });
 
     function fmtBytes(n) {
       if (!n) return '';
@@ -215,7 +302,7 @@
         prog2.classList.add('show'); p2wrap.classList.add('indet');
         const tr = await (await fetch('/api/transfer', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: pres.key, title: document.getElementById('title').value || '' })
+          body: JSON.stringify({ key: pres.key, title: titleInput.value || '', description: descInput.value || '' })
         })).json();
         if (!tr.jobId) throw new Error(tr.error || 'Could not start transfer');
 
