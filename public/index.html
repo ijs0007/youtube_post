@@ -88,7 +88,13 @@
     .posgrid { display:grid; grid-template-columns:repeat(3,40px); gap:6px; margin-bottom:18px; }
     .posgrid button { width:40px; height:40px; background:#26262e; color:var(--muted); padding:0; border-radius:8px; font-size:16px; line-height:1; }
     .posgrid button.sel { background:var(--accent); color:#fff; }
-    #thumbCanvas { width:100%; height:auto; border-radius:12px; display:block; background:#000; margin-bottom:12px; }
+    #thumbCanvas { width:100%; height:auto; border-radius:12px; display:block; background:#000; margin-bottom:12px; touch-action:none; cursor:grab; }
+    #thumbCanvas:active { cursor:grabbing; }
+    .ctlval { color:var(--muted); font-weight:600; font-size:13px; }
+    input[type=range] { width:100%; margin:2px 0 16px; accent-color:var(--accent); }
+    .swatches { display:flex; gap:10px; margin-bottom:18px; }
+    .swatches button { width:30px; height:30px; border-radius:50%; padding:0; border:2px solid transparent; cursor:pointer; }
+    .swatches button.sel { border-color:#fff; box-shadow:0 0 0 2px var(--bg); }
   </style>
 </head>
 <body>
@@ -172,13 +178,23 @@
       <label>Frame from your film</label>
       <div id="frameStrip" class="framestrip"></div>
       <input type="file" id="frameUpload" accept="image/*">
-      <p class="hint" style="margin:-8px 0 16px">Pick an auto-grabbed frame, or upload your own still.</p>
+      <p class="hint" style="margin:-8px 0 14px">Pick an auto-grabbed frame, or upload your own still. <b>Drag the image to reposition it.</b></p>
+
+      <label>Image zoom <span id="zoomVal" class="ctlval">1.0&times;</span></label>
+      <input type="range" id="zoomRange" min="1" max="2.6" step="0.05" value="1">
+      <button id="resetFrameBtn" class="secondary" style="margin:-4px 0 18px">Reset frame position</button>
 
       <label for="overlayText">Overlay text — one line per row</label>
       <textarea id="overlayText" style="min-height:84px" placeholder="The punchy text on the thumbnail"></textarea>
 
-      <label>Tap a word to highlight it blue</label>
+      <label>Tap a word to highlight it</label>
       <div id="wordChips" class="chips"></div>
+
+      <label>Highlight color</label>
+      <div id="accentRow" class="swatches"></div>
+
+      <label>Text size <span id="sizeVal" class="ctlval">100%</span></label>
+      <input type="range" id="sizeRange" min="0.7" max="1.4" step="0.05" value="1">
 
       <label>Text position</label>
       <div id="posGrid" class="posgrid"></div>
@@ -203,7 +219,7 @@
       </div>
     </div>
 
-    <div class="foot">v0.13 — step 3</div>
+    <div class="foot">v0.14 — step 3</div>
   </div>
 
   <script>
@@ -260,6 +276,11 @@
     let thumbFrameImg = null;     // current background Image
     let thumbPos = 'tr';          // text anchor: [t/m/b][l/c/r]
     let montserratReady = false;
+    let bgScale = 1;              // background zoom (1 = cover)
+    let bgOffsetX = 0;            // background pan (canvas px)
+    let bgOffsetY = 0;
+    let textScale = 1;           // global text-size multiplier
+    let accentColor = '#0eaaf5'; // highlight color for popped words
 
     async function refreshStatus() {
       try {
@@ -859,16 +880,23 @@
       return blocks;
     }
 
-    function drawCover(ctx, img, W, H) {
-      var ir = img.width / img.height, cr = W / H, dw, dh, dx, dy;
-      if (ir > cr) { dh = H; dw = H * ir; dx = (W - dw) / 2; dy = 0; }
-      else { dw = W; dh = W / ir; dx = 0; dy = (H - dh) / 2; }
+    // Background with zoom + pan. Offsets are clamped so the image always fully
+    // covers the canvas (no black gaps), and the clamped value is written back so
+    // dragging stays bounded. Zoom past the film's own letterbox bars here.
+    function drawBackground(ctx, img, W, H) {
+      var ir = img.width / img.height, cr = W / H, baseW, baseH;
+      if (ir > cr) { baseH = H; baseW = H * ir; } else { baseW = W; baseH = W / ir; }
+      var dw = baseW * bgScale, dh = baseH * bgScale;
+      var cx = (W - dw) / 2, cy = (H - dh) / 2;
+      var dx = Math.min(0, Math.max(W - dw, cx + bgOffsetX));
+      var dy = Math.min(0, Math.max(H - dh, cy + bgOffsetY));
+      bgOffsetX = dx - cx; bgOffsetY = dy - cy;
       ctx.drawImage(img, dx, dy, dw, dh);
     }
 
     function drawOverlayText(ctx, W, H) {
       if (!overlayLines.length) return;
-      var opts = { W: W, H: H, targetW: W * 0.42, maxFont: 96, minFont: 30, padX: 18, padY: 10, lineGap: 12, margin: 50, anchor: thumbPos };
+      var opts = { W: W, H: H, targetW: W * 0.47 * textScale, maxFont: 108 * textScale, minFont: 26 * textScale, padX: 18, padY: 10, lineGap: 12, margin: 48, anchor: thumbPos };
       var blocks = layoutOverlay(function (s, fs) { return measureLine(ctx, s, fs); }, overlayLines, opts);
       for (var i = 0; i < blocks.length; i++) {
         var b = blocks[i];
@@ -880,7 +908,7 @@
         var cx = b.x + opts.padX;
         var spaceW = ctx.measureText(' ').width;
         for (var k = 0; k < b.line.length; k++) {
-          ctx.fillStyle = b.line[k].b ? '#0eaaf5' : '#ffffff';
+          ctx.fillStyle = b.line[k].b ? accentColor : '#ffffff';
           ctx.fillText(b.line[k].t, cx, baseline);
           cx += ctx.measureText(b.line[k].t).width + spaceW;
         }
@@ -918,7 +946,7 @@
       if (!c) return;
       var ctx = c.getContext('2d');
       ctx.clearRect(0, 0, 1280, 720);
-      if (thumbFrameImg && thumbFrameImg.complete && thumbFrameImg.naturalWidth) drawCover(ctx, thumbFrameImg, 1280, 720);
+      if (thumbFrameImg && thumbFrameImg.complete && thumbFrameImg.naturalWidth) drawBackground(ctx, thumbFrameImg, 1280, 720);
       else { ctx.fillStyle = '#0d0d10'; ctx.fillRect(0, 0, 1280, 720); }
       drawOverlayText(ctx, 1280, 720);
       drawBorder(ctx, 1280, 720);
@@ -946,6 +974,25 @@
       return out;
     }
 
+    function hexToRgba(hex, a) {
+      var h = hex.replace('#', '');
+      if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+      var n = parseInt(h, 16);
+      return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+
+    function styleChip(chip, on) {
+      if (on) {
+        chip.style.background = hexToRgba(accentColor, 0.16);
+        chip.style.color = accentColor;
+        chip.style.borderColor = accentColor;
+      } else {
+        chip.style.background = '';
+        chip.style.color = '';
+        chip.style.borderColor = '';
+      }
+    }
+
     function renderChips() {
       var box = document.getElementById('wordChips');
       box.innerHTML = '';
@@ -953,11 +1000,12 @@
         line.forEach(function (w, wi) {
           var chip = document.createElement('button');
           chip.type = 'button';
-          chip.className = 'chip' + (w.b ? ' blue' : '');
+          chip.className = 'chip';
           chip.textContent = w.t;
+          styleChip(chip, w.b);
           chip.addEventListener('click', function () {
             overlayLines[li][wi].b = !overlayLines[li][wi].b;
-            chip.classList.toggle('blue');
+            styleChip(chip, overlayLines[li][wi].b);
             drawThumb();
           });
           box.appendChild(chip);
@@ -983,9 +1031,35 @@
       });
     }
 
+    var accentColors = ['#0eaaf5', '#ffd60a', '#ff453a', '#30d158', '#ff9f0a', '#ff2d92'];
+    function buildAccentRow() {
+      var row = document.getElementById('accentRow');
+      row.innerHTML = '';
+      accentColors.forEach(function (col) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.style.background = col;
+        btn.className = (col === accentColor ? 'sel' : '');
+        btn.addEventListener('click', function () {
+          accentColor = col;
+          Array.prototype.forEach.call(row.children, function (c) { c.classList.remove('sel'); });
+          btn.classList.add('sel');
+          renderChips();
+          drawThumb();
+        });
+        row.appendChild(btn);
+      });
+    }
+
     function applyFrame(src, selEl) {
       var img = new Image();
-      img.onload = function () { thumbFrameImg = img; drawThumb(); };
+      img.onload = function () {
+        thumbFrameImg = img;
+        bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; // fresh frame starts at cover
+        var zr = document.getElementById('zoomRange'); if (zr) zr.value = '1';
+        var zv = document.getElementById('zoomVal'); if (zv) zv.textContent = '1.0\u00d7';
+        drawThumb();
+      };
       img.src = src;
       var strip = document.getElementById('frameStrip');
       Array.prototype.forEach.call(strip.children, function (c) { c.classList.remove('sel'); });
@@ -1011,6 +1085,7 @@
       setThumbBtn.disabled = true;
       await ensureFont();
       buildPosGrid();
+      buildAccentRow();
       drawThumb();
 
       var textP = fetch('/api/thumb/text', {
@@ -1070,6 +1145,47 @@
     document.getElementById('frameUpload').addEventListener('change', function (e) {
       var f = e.target.files[0]; if (!f) return;
       applyFrame(URL.createObjectURL(f), null);
+    });
+
+    // Drag the background image to reposition it.
+    (function () {
+      var canvas = document.getElementById('thumbCanvas');
+      var dragging = false, sx0 = 0, sy0 = 0, ox0 = 0, oy0 = 0;
+      canvas.addEventListener('pointerdown', function (e) {
+        if (!thumbFrameImg) return;
+        dragging = true;
+        try { canvas.setPointerCapture(e.pointerId); } catch (err) { }
+        sx0 = e.clientX; sy0 = e.clientY; ox0 = bgOffsetX; oy0 = bgOffsetY;
+      });
+      canvas.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        var k = canvas.width / canvas.clientWidth;
+        bgOffsetX = ox0 + (e.clientX - sx0) * k;
+        bgOffsetY = oy0 + (e.clientY - sy0) * k;
+        drawThumb();
+      });
+      function end() { dragging = false; }
+      canvas.addEventListener('pointerup', end);
+      canvas.addEventListener('pointercancel', end);
+    })();
+
+    document.getElementById('zoomRange').addEventListener('input', function (e) {
+      bgScale = parseFloat(e.target.value);
+      document.getElementById('zoomVal').textContent = bgScale.toFixed(1) + '\u00d7';
+      drawThumb();
+    });
+
+    document.getElementById('resetFrameBtn').addEventListener('click', function () {
+      bgScale = 1; bgOffsetX = 0; bgOffsetY = 0;
+      document.getElementById('zoomRange').value = '1';
+      document.getElementById('zoomVal').textContent = '1.0\u00d7';
+      drawThumb();
+    });
+
+    document.getElementById('sizeRange').addEventListener('input', function (e) {
+      textScale = parseFloat(e.target.value);
+      document.getElementById('sizeVal').textContent = Math.round(textScale * 100) + '%';
+      drawThumb();
     });
 
     setThumbBtn.addEventListener('click', function () {
