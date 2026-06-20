@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import { google } from "googleapis";
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
@@ -20,7 +21,7 @@ import ffmpegStatic from "ffmpeg-static";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_VERSION = "0.06";
+const APP_VERSION = "0.07";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -156,33 +157,34 @@ function runFfmpeg(args) {
       tail += d.toString();
       if (tail.length > 6000) tail = tail.slice(-6000);
     });
-    proc.on("error", reject);
-    proc.on("close", (code) =>
-      code === 0 ? resolve() : reject(new Error("ffmpeg exited " + code + ": " + tail.slice(-400)))
-    );
+    proc.on("error", (e) => reject(new Error("Could not start ffmpeg: " + e.message)));
+    proc.on("close", (code, signal) => {
+      if (code === 0) return resolve();
+      const why = signal ? `was killed by ${signal} (usually means out of memory)` : `exited with code ${code}`;
+      reject(new Error(`ffmpeg ${why}: ${tail.slice(-400) || "(no output)"}`));
+    });
   });
 }
 
-// Background transcription: extract a tiny mono 16kHz audio track straight from
-// the R2 object (ffmpeg reads it over a signed URL via HTTP range, so the multi-GB
-// video never touches Render's disk — only the small audio does), then send that
-// to OpenAI Whisper. whisper-1 + response_format=srt yields timestamped output, so
-// the metadata step can build real chapters from it.
+// Background transcription: pull the master from R2 to a local temp file in a steady
+// stream (constant memory, no matter the file size), extract a tiny mono 16kHz audio
+// track from that local file with ffmpeg (a local file is seek-friendly and keeps
+// ffmpeg's memory low — streaming straight off the web made ffmpeg OOM-kill on a small
+// Render box), then send the audio to OpenAI Whisper. whisper-1 + response_format=srt
+// yields timestamped output, so the metadata step can build real chapters from it.
 async function runTranscription(jobId, key) {
   const job = transcribeJobs.get(jobId);
+  const tmpVideo = path.join(os.tmpdir(), `yt-vid-${jobId}`);
   const tmpAudio = path.join(os.tmpdir(), `yt-aud-${jobId}.mp3`);
   try {
-    job.state = "preparing";
-    const url = await getSignedUrl(
-      s3,
-      new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }),
-      { expiresIn: 3600 }
-    );
+    job.state = "fetching";
+    const obj = await s3.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+    await pipeline(obj.Body, fs.createWriteStream(tmpVideo));
 
     job.state = "extracting";
     await runFfmpeg([
-      "-hide_banner", "-loglevel", "error", "-y",
-      "-i", url,
+      "-hide_banner", "-loglevel", "warning", "-y",
+      "-i", tmpVideo,
       "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", "-f", "mp3",
       tmpAudio,
     ]);
@@ -220,6 +222,7 @@ async function runTranscription(jobId, key) {
     job.state = "error";
     job.error = err?.message || String(err);
   } finally {
+    fs.promises.unlink(tmpVideo).catch(() => {});
     fs.promises.unlink(tmpAudio).catch(() => {});
   }
 }
@@ -349,7 +352,7 @@ app.post("/api/transcribe", (req, res) => {
   if (!key) return res.status(400).json({ error: "Missing key." });
 
   const jobId = crypto.randomUUID();
-  transcribeJobs.set(jobId, { state: "preparing", createdAt: Date.now() });
+  transcribeJobs.set(jobId, { state: "fetching", createdAt: Date.now() });
   runTranscription(jobId, key);
   res.json({ jobId });
 });
