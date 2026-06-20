@@ -13,7 +13,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_VERSION = "0.03";
+const APP_VERSION = "0.04";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -196,9 +196,11 @@ app.post("/api/presign", async (req, res) => {
   const ct = contentType || "application/octet-stream";
   const key = `uploads/${Date.now()}-${crypto.randomBytes(3).toString("hex")}-${safeName(filename)}`;
   try {
+    // Sign host only (no content-type), so there's no header for the browser
+    // to mismatch against. Content-type still rides along unsigned -> stored fine.
     const url = await getSignedUrl(
       s3,
-      new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, ContentType: ct }),
+      new PutObjectCommand({ Bucket: R2_BUCKET, Key: key }),
       { expiresIn: 3600 }
     );
     res.json({ key, url, contentType: ct, size: size || 0 });
@@ -230,6 +232,25 @@ app.get("/api/transfer/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job) return res.status(404).json({ error: "Unknown job." });
   res.json(job);
+});
+
+// Diagnostic: write a tiny object to R2 from the server (bypasses the browser
+// + CORS entirely). If this succeeds, keys + bucket + permissions are good and
+// any upload failure is browser/CORS-side. If it fails, the error names why.
+app.get("/api/r2test", async (req, res) => {
+  if (!r2Configured) return res.status(500).json({ ok: false, error: "R2 not configured." });
+  const key = `uploads/_r2test-${Date.now()}.txt`;
+  try {
+    await s3.send(new PutObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+      Body: "r2 write test",
+      ContentType: "text/plain",
+    }));
+    res.json({ ok: true, key, message: "Server-side write to R2 succeeded — keys, bucket, and permissions are good." });
+  } catch (err) {
+    res.status(500).json({ ok: false, name: err?.name || "", error: err?.message || String(err) });
+  }
 });
 
 app.listen(PORT, () => {
