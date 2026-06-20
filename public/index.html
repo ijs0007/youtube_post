@@ -88,6 +88,9 @@
     .posgrid { display:grid; grid-template-columns:repeat(3,40px); gap:6px; margin-bottom:18px; }
     .posgrid button { width:40px; height:40px; background:#26262e; color:var(--muted); padding:0; border-radius:8px; font-size:16px; line-height:1; }
     .posgrid button.sel { background:var(--accent); color:#fff; }
+    .segmented { display:flex; gap:4px; background:#16161b; border:1px solid var(--line); border-radius:10px; padding:4px; margin-bottom:14px; }
+    .segmented button { flex:1; width:auto; background:transparent; color:var(--muted); padding:9px 0; border-radius:7px; font-size:14px; font-weight:600; }
+    .segmented button.sel { background:var(--accent); color:#fff; }
     #thumbCanvas { width:100%; height:auto; border-radius:12px; display:block; background:#000; margin-bottom:12px; touch-action:none; cursor:grab; }
     #thumbCanvas:active { cursor:grabbing; }
     .ctlval { color:var(--muted); font-weight:600; font-size:13px; }
@@ -172,6 +175,10 @@
 
     <div id="thumbCard" class="card" style="display:none">
       <label style="font-size:15px; color:var(--ink); margin-bottom:12px">Thumbnail</label>
+      <div id="styleToggle" class="segmented">
+        <button type="button" data-style="cinematic" class="sel">Cinematic</button>
+        <button type="button" data-style="blocks">Blocks</button>
+      </div>
       <canvas id="thumbCanvas" width="1280" height="720"></canvas>
       <p class="genstatus" id="thumbStatus"></p>
 
@@ -219,7 +226,7 @@
       </div>
     </div>
 
-    <div class="foot">v0.14 — step 3</div>
+    <div class="foot">v0.15 — step 3</div>
   </div>
 
   <script>
@@ -274,7 +281,8 @@
     let lastRawTitle = '';
     let overlayLines = [];        // [[{t,b}],...] source of truth for the text
     let thumbFrameImg = null;     // current background Image
-    let thumbPos = 'tr';          // text anchor: [t/m/b][l/c/r]
+    let thumbPos = 'bl';          // text anchor: [t/m/b][l/c/r]
+    let thumbStyle = 'cinematic'; // 'cinematic' (scrim + big bottom text) | 'blocks'
     let montserratReady = false;
     let bgScale = 1;              // background zoom (1 = cover)
     let bgOffsetX = 0;            // background pan (canvas px)
@@ -894,7 +902,8 @@
       ctx.drawImage(img, dx, dy, dw, dh);
     }
 
-    function drawOverlayText(ctx, W, H) {
+    // BLOCKS style: each line on its own black rounded block, white/accent words.
+    function drawOverlayBlocks(ctx, W, H) {
       if (!overlayLines.length) return;
       var opts = { W: W, H: H, targetW: W * 0.47 * textScale, maxFont: 108 * textScale, minFont: 26 * textScale, padX: 18, padY: 10, lineGap: 12, margin: 48, anchor: thumbPos };
       var blocks = layoutOverlay(function (s, fs) { return measureLine(ctx, s, fs); }, overlayLines, opts);
@@ -915,30 +924,70 @@
       }
     }
 
-    function drawBorder(ctx, W, H) {
-      roundRectPath(ctx, 12, 12, W - 24, H - 24, 36);
-      ctx.lineWidth = 20; ctx.strokeStyle = '#f45911'; ctx.stroke();
+    // CINEMATIC style: dark gradient rising from the bottom for legibility.
+    function drawScrim(ctx, W, H) {
+      var g = ctx.createLinearGradient(0, H * 0.32, 0, H);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(0.55, 'rgba(0,0,0,0.45)');
+      g.addColorStop(1, 'rgba(0,0,0,0.9)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
     }
 
-    function drawBadge(ctx, W, H) {
-      var M = 34, pillH = 84, avD = pillH - 22, pad = 12;
-      ctx.font = '800 23px Montserrat, sans-serif'; ctx.textBaseline = 'alphabetic';
+    // CINEMATIC style: big text, no blocks, soft drop shadow for pop.
+    function drawOverlayClean(ctx, W, H) {
+      if (!overlayLines.length) return;
+      var opts = { W: W, H: H, targetW: W * 0.64 * textScale, maxFont: 170 * textScale, minFont: 34 * textScale, padX: 0, padY: 4, lineGap: 4, margin: 56, anchor: thumbPos };
+      var blocks = layoutOverlay(function (s, fs) { return measureLine(ctx, s, fs); }, overlayLines, opts);
+      for (var i = 0; i < blocks.length; i++) {
+        var b = blocks[i];
+        ctx.font = '800 ' + b.fs + 'px Montserrat, sans-serif';
+        ctx.textBaseline = 'alphabetic';
+        var baseline = b.y + opts.padY + b.asc;
+        var cx = b.x + opts.padX;
+        var spaceW = ctx.measureText(' ').width;
+        for (var k = 0; k < b.line.length; k++) {
+          var w = b.line[k];
+          ctx.fillStyle = 'rgba(0,0,0,0.55)';
+          ctx.fillText(w.t, cx + Math.max(2, b.fs * 0.02), baseline + Math.max(3, b.fs * 0.03));
+          ctx.fillStyle = w.b ? accentColor : '#ffffff';
+          ctx.fillText(w.t, cx, baseline);
+          cx += ctx.measureText(w.t).width + spaceW;
+        }
+      }
+    }
+
+    function drawBorder(ctx, W, H, thin) {
+      var bw = thin ? 11 : 20, inset = thin ? 7 : 12, r = thin ? 28 : 36;
+      roundRectPath(ctx, inset, inset, W - 2 * inset, H - 2 * inset, r);
+      ctx.lineWidth = bw; ctx.strokeStyle = '#f45911'; ctx.stroke();
+    }
+
+    function drawBadge(ctx, W, H, style) {
+      var cine = style === 'cinematic';
+      var M = 34, pillH = cine ? 70 : 84, avD = pillH - (cine ? 16 : 22), pad = 12;
+      var nameFs = cine ? 21 : 23;
+      ctx.font = '800 ' + nameFs + 'px Montserrat, sans-serif'; ctx.textBaseline = 'alphabetic';
       var nameW = Math.max(ctx.measureText('ISAIAH').width, ctx.measureText('JEREMIAH').width);
       var pillW = pad + avD + 12 + nameW + pad + 4;
-      var x0 = M, y0 = H - M - pillH;
+      var x0 = M, y0 = cine ? M : (H - M - pillH); // cinematic badge top-left, blocks bottom-left
       roundRectPath(ctx, x0, y0, pillW, pillH, 16);
-      ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fill();
+      ctx.fillStyle = cine ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.72)'; ctx.fill();
       if (avatarReady) {
         var ax = x0 + pad, ay = y0 + (pillH - avD) / 2;
         ctx.save();
         ctx.beginPath(); ctx.arc(ax + avD / 2, ay + avD / 2, avD / 2, 0, Math.PI * 2); ctx.clip();
         ctx.drawImage(badgeAvatar, ax, ay, avD, avD);
         ctx.restore();
+        if (cine) {
+          ctx.beginPath(); ctx.arc(ax + avD / 2, ay + avD / 2, avD / 2, 0, Math.PI * 2);
+          ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.stroke();
+        }
       }
       ctx.fillStyle = '#fff';
       var tx = x0 + pad + avD + 12;
       ctx.fillText('ISAIAH', tx, y0 + pillH / 2 - 3);
-      ctx.fillText('JEREMIAH', tx, y0 + pillH / 2 + 23);
+      ctx.fillText('JEREMIAH', tx, y0 + pillH / 2 + nameFs - 1);
     }
 
     function drawThumb() {
@@ -948,9 +997,16 @@
       ctx.clearRect(0, 0, 1280, 720);
       if (thumbFrameImg && thumbFrameImg.complete && thumbFrameImg.naturalWidth) drawBackground(ctx, thumbFrameImg, 1280, 720);
       else { ctx.fillStyle = '#0d0d10'; ctx.fillRect(0, 0, 1280, 720); }
-      drawOverlayText(ctx, 1280, 720);
-      drawBorder(ctx, 1280, 720);
-      drawBadge(ctx, 1280, 720);
+      if (thumbStyle === 'cinematic') {
+        drawScrim(ctx, 1280, 720);
+        drawOverlayClean(ctx, 1280, 720);
+        drawBorder(ctx, 1280, 720, true);
+        drawBadge(ctx, 1280, 720, 'cinematic');
+      } else {
+        drawOverlayBlocks(ctx, 1280, 720);
+        drawBorder(ctx, 1280, 720, false);
+        drawBadge(ctx, 1280, 720, 'blocks');
+      }
     }
 
     function overlayLinesToText(lines) {
@@ -1187,6 +1243,20 @@
       document.getElementById('sizeVal').textContent = Math.round(textScale * 100) + '%';
       drawThumb();
     });
+
+    (function () {
+      var seg = document.getElementById('styleToggle');
+      Array.prototype.forEach.call(seg.querySelectorAll('button'), function (btn) {
+        btn.addEventListener('click', function () {
+          thumbStyle = btn.getAttribute('data-style');
+          Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { b.classList.remove('sel'); });
+          btn.classList.add('sel');
+          thumbPos = (thumbStyle === 'cinematic') ? 'bl' : 'tr'; // sensible default per style
+          buildPosGrid();
+          drawThumb();
+        });
+      });
+    })();
 
     setThumbBtn.addEventListener('click', function () {
       if (!thumbVideoId) return;
