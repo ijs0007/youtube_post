@@ -42,7 +42,7 @@ import pg from "pg";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_VERSION = "0.10";
+const APP_VERSION = "0.11";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -175,16 +175,14 @@ const DEFAULT_DESCRIPTION_TEMPLATE = [
   "TikTok - tiktok.com/@isaiahjeremiahsmith",
   "Website - isaiahsmithfilms.com",
   "",
+  "",
   "CREW",
+  "{{CREW}}",
   "",
-  "DIRECTED BY",
-  "{{DIRECTOR}}",
-  "",
-  "EDITED BY",
-  "{{EDITOR}}",
   "",
   "CAST",
   "{{CAST}}",
+  "",
   "",
   "Chapter Markers",
   "{{CHAPTERS}}",
@@ -216,7 +214,9 @@ function scanTokens(text) {
   return out;
 }
 
-// Collapse runs of blank lines to one, strip trailing spaces, trim ends.
+// Collapse runs of 3+ blank lines down to 2 (keeps intentional double-blank
+// section spacing, only trims gaps an empty token would create), strip trailing
+// spaces, trim ends.
 function tidyText(text) {
   const trimmed = String(text).split("\n").map((l) => {
     let x = l;
@@ -228,7 +228,7 @@ function tidyText(text) {
   for (const l of trimmed) {
     if (l.trim() === "") {
       blankRun++;
-      if (blankRun <= 1) out.push("");
+      if (blankRun <= 2) out.push("");
     } else {
       blankRun = 0;
       out.push(l);
@@ -823,7 +823,7 @@ app.post("/api/metadata", async (req, res) => {
     'Respond with a SINGLE JSON object with exactly three string fields: "title", "synopsis", and "chapters". No other keys.',
     "",
     "Rules:",
-    "- title: a compelling, human title for a narrative short film, under 90 characters. No clickbait, no emoji spam, no SEO keyword stuffing. It should read like a real film title. Do NOT add the channel name or any '| ...' suffix — that is added separately.",
+    "- title: a CATCHY, attention-grabbing title in the style of viral YouTube short films — a punchy, present-tense hook that captures the central conflict, the surprising turn, or the emotional stakes and makes someone want to click. Under 90 characters, Title Case, no emoji. It must stay TRUE to the film: create intrigue, never deceive, and never reveal the ending. Match the dramatic, curiosity-driven style of this channel's real titles, e.g. \"Boss Lady Shocks Co-worker With Unexpected Act of Kindness\", \"Woman Vows To Never Forgive Her Sister Again\", \"Man Blames Himself For Wife's Death, Contemplates Suicide\". Do NOT add the channel name or any '| ...' suffix — that is added separately.",
     "- synopsis: 1-3 short paragraphs describing the film in an engaging, spoiler-light way (set premise and tone; do not reveal the ending). Plain paragraphs only — no chapter timestamps, no section headers, no calls to subscribe.",
     '- chapters: ONLY if the transcript includes timestamps, a newline-separated list of chapter markers, one per line, in the format "M:SS Label" (use "H:MM:SS Label" for films over an hour). The FIRST line MUST start at "0:00". Provide at least 3 chapters, each at least 10 seconds after the previous one, anchored to real shifts in the transcript (scene/beat changes). If the transcript has NO timestamps, return an empty string "" — do not invent chapters.',
     "- If the transcript is empty or nearly silent (little/no dialogue), rely on the logline for the synopsis. Do not fabricate plot or dialogue that the inputs don't support.",

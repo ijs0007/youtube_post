@@ -159,14 +159,12 @@
 
         <p class="hint" id="tplLegend" style="margin:-6px 0 16px"></p>
 
-        <div id="tplFields"></div>
-
         <button id="tplSaveBtn">Save template</button>
         <p class="genstatus" id="tplStatus"></p>
       </div>
     </div>
 
-    <div class="foot">v0.10 — step 3</div>
+    <div class="foot">v0.11 — step 3</div>
   </div>
 
   <script>
@@ -670,13 +668,11 @@
     const tplTitle = document.getElementById('tplTitle');
     const tplDesc = document.getElementById('tplDesc');
     const tplLegend = document.getElementById('tplLegend');
-    const tplFields = document.getElementById('tplFields');
     const tplSaveBtn = document.getElementById('tplSaveBtn');
     const tplStatus = document.getElementById('tplStatus');
 
     let templateLoaded = false;
     let autoTokens = ['TITLE', 'SYNOPSIS', 'CHAPTERS'];
-    let tplDefaults = {};
     let tplPersisted = false;
 
     function showTab(which) {
@@ -690,63 +686,16 @@
     tabUpload.addEventListener('click', () => showTab('upload'));
     tabTemplate.addEventListener('click', () => showTab('template'));
 
-    // Same token scan as the server (string-only), so the field list matches.
-    function scanTokensClient(text) {
-      const s = String(text || ''); const out = []; let i = 0;
-      while (true) {
-        const a = s.indexOf('{{', i); if (a === -1) break;
-        const b = s.indexOf('}}', a + 2); if (b === -1) break;
-        const name = s.slice(a + 2, b).trim().toUpperCase();
-        if (name && out.indexOf(name) === -1) out.push(name);
-        i = b + 2;
-      }
-      return out;
-    }
-
-    function harvestFieldValues() {
-      tplFields.querySelectorAll('input[data-token]').forEach((inp) => {
-        tplDefaults[inp.getAttribute('data-token')] = inp.value;
-      });
-    }
-
-    function renderFields() {
-      harvestFieldValues();
-      const tokens = scanTokensClient(tplTitle.value + '\n' + tplDesc.value)
-        .filter((t) => autoTokens.indexOf(t) === -1);
-      tplFields.innerHTML = '';
-      if (tokens.length === 0) return;
-      const head = document.createElement('p');
-      head.className = 'tplnote';
-      head.textContent = 'Default values for your fields (you can still edit any of these per video before sending):';
-      tplFields.appendChild(head);
-      tokens.forEach((t) => {
-        const wrap = document.createElement('div'); wrap.className = 'field';
-        const lab = document.createElement('label'); lab.textContent = '{{' + t + '}}';
-        const inp = document.createElement('input'); inp.type = 'text';
-        inp.setAttribute('data-token', t);
-        inp.value = tplDefaults[t] || '';
-        if (t === 'CAST') inp.placeholder = 'e.g. Jane Doe - Maria; John Roe - David';
-        wrap.appendChild(lab); wrap.appendChild(inp); tplFields.appendChild(wrap);
-      });
-    }
-
-    let scanTimer = null;
-    function scheduleRender() { clearTimeout(scanTimer); scanTimer = setTimeout(renderFields, 250); }
-    tplTitle.addEventListener('input', scheduleRender);
-    tplDesc.addEventListener('input', scheduleRender);
-
     async function loadTemplate() {
       try {
         const t = await (await fetch('/api/template')).json();
         tplTitle.value = t.titleTemplate || '';
         tplDesc.value = t.descriptionTemplate || '';
-        tplDefaults = t.defaults || {};
         autoTokens = t.autoTokens || autoTokens;
         tplPersisted = !!t.persisted;
         tplLegend.innerHTML = 'Auto-filled for you: ' +
           autoTokens.map((x) => '<b>{{' + x + '}}</b>').join(', ') +
-          '. Any other <b>{{NAME}}</b> becomes a field you set below.';
-        renderFields();
+          '. Any other slot like <b>{{CREW}}</b> or <b>{{CAST}}</b> stays blank for you to fill on the video before sending (auto-fill from your project comes later).';
         if (!tplPersisted) {
           tplStatus.innerHTML = '<span style="color:#ff9500">Saving is off — set DATABASE_URL in Render to make templates permanent. This shows the built-in default for now.</span>';
           tplSaveBtn.disabled = true;
@@ -761,13 +710,12 @@
     }
 
     tplSaveBtn.addEventListener('click', async () => {
-      harvestFieldValues();
       tplSaveBtn.disabled = true;
       const orig = tplSaveBtn.textContent; tplSaveBtn.textContent = 'Saving…';
       try {
         const res = await (await fetch('/api/template', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ titleTemplate: tplTitle.value, descriptionTemplate: tplDesc.value, defaults: tplDefaults })
+          body: JSON.stringify({ titleTemplate: tplTitle.value, descriptionTemplate: tplDesc.value, defaults: {} })
         })).json();
         if (res.ok) {
           tplStatus.innerHTML = '<span style="color:#34c759">Saved. New uploads will use this template.</span>';
