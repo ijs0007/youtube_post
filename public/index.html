@@ -49,6 +49,11 @@
     .hint { font-size:13px; color:var(--muted); margin:10px 0 0; }
     .progress { display:none; margin-top:18px; }
     .progress.show { display:block; }
+    .resumebox { display:none; margin-top:14px; padding:14px; border:1px solid var(--line); border-radius:12px; background:#fffaf2; }
+    .resumebox.show { display:block; }
+    .resumetext { font-size:13px; color:#9a6a00; font-weight:600; margin-bottom:10px; line-height:1.45; }
+    a.cancel { display:inline-block; font-size:12px; color:var(--muted); text-decoration:none; }
+    a.cancel:hover { color:#ff3b30; }
     .pbar-label { display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-bottom:6px; }
     .pbar { height:8px; background:#e8e8ed; border-radius:99px; overflow:hidden; }
     .pbar > span { display:block; height:100%; width:0%; background:var(--accent); border-radius:99px; transition:width .3s; }
@@ -108,8 +113,14 @@
       <p class="hint" id="hint">Uploads straight to R2 (skips Render), then transfers to YouTube as a private video.</p>
 
       <div id="prog1" class="progress">
-        <div class="pbar-label"><span>Uploading to R2</span><span id="p1pct">0%</span></div>
+        <div class="pbar-label"><span id="p1label">Uploading to R2</span><span id="p1pct">0%</span></div>
         <div class="pbar"><span id="p1bar"></span></div>
+      </div>
+
+      <div id="resumeBox" class="resumebox">
+        <div class="resumetext" id="resumeText">Upload paused.</div>
+        <button id="resumeBtn" class="secondary" style="margin-bottom:8px">Resume upload</button>
+        <a href="#" id="cancelLink" class="cancel">Cancel this upload</a>
       </div>
 
       <div id="progT" class="progress">
@@ -125,7 +136,7 @@
       <div id="result" class="result"><div id="resultBody"></div></div>
     </div>
 
-    <div class="foot">v0.07 — step 3</div>
+    <div class="foot">v0.08 — step 3</div>
   </div>
 
   <script>
@@ -157,6 +168,15 @@
     const p2label = document.getElementById('p2label');
     const result = document.getElementById('result');
     const resultBody = document.getElementById('resultBody');
+    const p1label = document.getElementById('p1label');
+    const resumeBox = document.getElementById('resumeBox');
+    const resumeText = document.getElementById('resumeText');
+    const resumeBtn = document.getElementById('resumeBtn');
+    const cancelLink = document.getElementById('cancelLink');
+
+    // Files at/over this go through chunked (multipart) upload; smaller ones keep
+    // the proven single-PUT path. Must mirror MULTIPART_MIN on the server.
+    const MULTIPART_THRESHOLD = 50 * 1024 * 1024; // 50MB
 
     let ready = false;            // YouTube + R2 ready (upload allowed)
     let aiReady = false;          // Anthropic key set (Generate allowed)
@@ -279,10 +299,18 @@
       });
     }
 
-    // browser -> R2, returns the object key
+    // browser -> R2 dispatcher: small files use the original single-PUT path
+    // (proven, untouched); big files use chunked multipart with retry + resume.
     async function doR2Upload(file) {
+      if (file.size < MULTIPART_THRESHOLD) return doSinglePut(file);
+      return doMultipartUpload(file);
+    }
+
+    // --- Small files: single PUT (original path) ---
+    async function doSinglePut(file) {
       const contentType = file.type || 'application/octet-stream';
       prog1.classList.add('show');
+      p1label.textContent = 'Uploading to R2';
       p1bar.style.width = '0%'; p1pct.textContent = '0%';
       const pres = await (await fetch('/api/presign', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -292,6 +320,177 @@
       await putToR2(pres.url, file, contentType);
       p1bar.style.width = '100%'; p1pct.textContent = '100%';
       return pres.key;
+    }
+
+    // --- Big files: chunked multipart upload ---
+    const MP_CONCURRENCY = 4; // parts uploaded in parallel
+    const MP_RETRIES = 3;     // automatic retries per part before pausing
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    function fmtBytes(n) {
+      if (n >= 1024 * 1024 * 1024) return (n / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+      if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(0) + ' MB';
+      return Math.max(1, Math.round(n / 1024)) + ' KB';
+    }
+
+    function mpUpdateBar(state) {
+      let loaded = 0;
+      for (const v of Object.values(state.loaded)) loaded += v;
+      if (loaded > state.file.size) loaded = state.file.size;
+      const pct = Math.round((loaded / state.file.size) * 100);
+      p1bar.style.width = pct + '%';
+      p1pct.textContent = pct + '%';
+      p1label.textContent = 'Uploading to R2 · ' + state.completed.size + '/' + state.partCount + ' parts';
+    }
+
+    // PUT one part's bytes to its presigned URL; resolve with the part's ETag.
+    function putPart(url, blob, partNumber, state) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        state.active[partNumber] = xhr;
+        xhr.open('PUT', url, true);
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) { state.loaded[partNumber] = e.loaded; mpUpdateBar(state); }
+        };
+        xhr.onload = () => {
+          delete state.active[partNumber];
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const etag = xhr.getResponseHeader('ETag');
+            if (!etag) return reject(new Error('No ETag returned for part ' + partNumber + ' (check R2 CORS ExposeHeaders includes ETag)'));
+            resolve(etag);
+          } else {
+            reject(new Error('Part ' + partNumber + ' failed (HTTP ' + xhr.status + ')'));
+          }
+        };
+        xhr.onerror = () => { delete state.active[partNumber]; reject(new Error('Network error on part ' + partNumber)); };
+        xhr.onabort = () => { delete state.active[partNumber]; reject(new Error('aborted')); };
+        xhr.send(blob);
+      });
+    }
+
+    async function uploadOnePart(state, n) {
+      const start = (n - 1) * state.partSize;
+      const end = Math.min(start + state.partSize, state.file.size);
+      const blob = state.file.slice(start, end);
+      const sign = await (await fetch('/api/multipart/sign-part', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, uploadId: state.uploadId, partNumber: n })
+      })).json();
+      if (!sign.url) throw new Error(sign.error || 'Could not sign part ' + n);
+      const etag = await putPart(sign.url, blob, n, state);
+      state.completed.set(n, etag);
+      state.loaded[n] = blob.size; // lock in this part's full byte count
+      mpUpdateBar(state);
+    }
+
+    // Upload every not-yet-done part with bounded concurrency + per-part retry.
+    // Returns 'done' if all parts landed, 'paused' if a part ran out of retries,
+    // 'canceled' if the user canceled.
+    async function runParts(state) {
+      const queue = [];
+      for (let n = 1; n <= state.partCount; n++) {
+        if (!state.completed.has(n)) queue.push(n);
+      }
+      let paused = false;
+
+      async function worker() {
+        while (queue.length && !paused && !state.canceled) {
+          const n = queue.shift();
+          let attempt = 0;
+          while (true) {
+            try { await uploadOnePart(state, n); break; }
+            catch (e) {
+              if (e.message === 'aborted' || state.canceled) return;
+              attempt++;
+              if (attempt > MP_RETRIES) { paused = true; queue.unshift(n); return; }
+              await sleep(800 * attempt); // simple backoff
+            }
+          }
+        }
+      }
+
+      const workers = [];
+      const lanes = Math.min(MP_CONCURRENCY, Math.max(1, queue.length));
+      for (let i = 0; i < lanes; i++) workers.push(worker());
+      await Promise.all(workers);
+
+      if (state.canceled) return 'canceled';
+      return paused ? 'paused' : 'done';
+    }
+
+    function showPaused(state) {
+      // Drop partial progress from parts that didn't finish so the bar reflects
+      // only fully-uploaded parts while we wait.
+      for (const k of Object.keys(state.loaded)) {
+        if (!state.completed.has(Number(k))) delete state.loaded[k];
+      }
+      mpUpdateBar(state);
+      const done = state.completed.size, total = state.partCount;
+      resumeText.textContent = 'Upload paused — ' + done + ' of ' + total + ' parts done (~' +
+        fmtBytes(done * state.partSize) + ' of ' + fmtBytes(state.file.size) +
+        '). Your connection may have dropped. The finished parts are safe.';
+      resumeBox.classList.add('show');
+    }
+
+    async function abortMultipart(state) {
+      try {
+        await fetch('/api/multipart/abort', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, uploadId: state.uploadId })
+        });
+      } catch (e) { /* best-effort cleanup */ }
+    }
+
+    async function doMultipartUpload(file) {
+      const contentType = file.type || 'application/octet-stream';
+      prog1.classList.add('show');
+      resumeBox.classList.remove('show');
+      p1label.textContent = 'Starting chunked upload';
+      p1bar.style.width = '0%'; p1pct.textContent = '0%';
+
+      const create = await (await fetch('/api/multipart/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType, size: file.size })
+      })).json();
+      if (!create.uploadId) throw new Error(create.error || 'Could not start chunked upload');
+
+      const state = {
+        file, contentType,
+        key: create.key, uploadId: create.uploadId,
+        partSize: create.partSize, partCount: create.partCount,
+        completed: new Map(), loaded: {}, active: {}, canceled: false,
+      };
+      mpUpdateBar(state);
+
+      // Upload, pausing for a manual Resume whenever automatic retries run out.
+      while (true) {
+        const outcome = await runParts(state);
+        if (outcome === 'canceled') { await abortMultipart(state); throw new Error('Upload canceled.'); }
+        if (outcome === 'done') break;
+        // paused: surface a Resume button and wait for the user.
+        showPaused(state);
+        await new Promise((resolve) => {
+          resumeBtn.onclick = () => { resumeBox.classList.remove('show'); p1label.textContent = 'Resuming upload'; resolve(); };
+          cancelLink.onclick = (ev) => { ev.preventDefault(); state.canceled = true; resumeBox.classList.remove('show'); resolve(); };
+        });
+        if (state.canceled) { await abortMultipart(state); throw new Error('Upload canceled.'); }
+      }
+
+      // All parts in — ask R2 to stitch them into the final object.
+      p1label.textContent = 'Finishing upload';
+      const parts = [...state.completed.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([PartNumber, ETag]) => ({ PartNumber, ETag }));
+      const done = await (await fetch('/api/multipart/complete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, uploadId: state.uploadId, parts })
+      })).json();
+      if (!done.ok) throw new Error(done.error || 'Could not finish chunked upload');
+
+      p1bar.style.width = '100%'; p1pct.textContent = '100%';
+      p1label.textContent = 'Uploaded to R2';
+      return state.key;
     }
 
     function pollTranscribe(jobId) {
@@ -390,6 +589,7 @@
       sendBtn.style.display = 'none';
       result.classList.remove('show'); resultBody.innerHTML = '';
       progT.classList.remove('show'); prog2.classList.remove('show');
+      resumeBox.classList.remove('show');
 
       try {
         const key = await doR2Upload(file);
@@ -407,6 +607,7 @@
       } catch (e) {
         result.classList.add('show');
         resultBody.innerHTML = '<p class="err">' + e.message + '</p>';
+        resumeBox.classList.remove('show');
         uploadBtn.style.display = 'block';
         uploadBtn.disabled = false; updateBtn();
       }

@@ -1,9 +1,15 @@
-// YouTube Uploader — Step 3 (v0.06): browser -> R2 (direct) -> background R2 ->
+// YouTube Uploader — Step 3 (v0.08): browser -> R2 (direct) -> background R2 ->
 // YouTube, plus AI metadata (title/description/chapters). Metadata can come from
 // an uploaded transcript, a logline, OR auto-transcription: ffmpeg pulls the audio
 // straight out of the R2 object and OpenAI Whisper turns it into a timed transcript.
 // Single-channel personal tool. Refresh token held in memory, seeded from
 // YT_REFRESH_TOKEN so authorization survives restarts once set.
+//
+// v0.08 adds CHUNKED (multipart) upload for big files: files over 50MB are cut
+// into ~50MB parts that upload with retry + in-session resume, removing the 5GB
+// ceiling. Small files keep the proven single-PUT path. The server orchestrates
+// the multipart create/complete (where credentials live) and hands the browser a
+// fresh presigned URL per part, so only raw part bytes ever touch R2 directly.
 
 import express from "express";
 import crypto from "node:crypto";
@@ -15,13 +21,13 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import { google } from "googleapis";
-import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, PutObjectCommand, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import ffmpegStatic from "ffmpeg-static";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_VERSION = "0.07";
+const APP_VERSION = "0.08";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -96,6 +102,27 @@ function safeName(name) {
   return String(name || "video")
     .replace(/[^a-zA-Z0-9._-]+/g, "_")
     .slice(0, 80);
+}
+
+// --- Chunked (multipart) upload sizing ---
+// Files over MULTIPART_MIN use multipart; smaller ones keep the single-PUT path.
+// S3/R2 rule: every part except the last must be >= 5MB, and there can be at most
+// 10,000 parts. 50MB parts means a 5GB film is ~100 parts. For absurdly large
+// files we grow the part size so we never exceed the part-count cap.
+const MULTIPART_MIN = 50 * 1024 * 1024;   // 50MB: at/above this -> multipart
+const BASE_PART_SIZE = 50 * 1024 * 1024;  // 50MB target part
+const MAX_PARTS = 9000;                    // headroom under the 10,000 hard cap
+
+function planParts(size) {
+  const total = Number(size) || 0;
+  let partSize = BASE_PART_SIZE;
+  if (Math.ceil(total / partSize) > MAX_PARTS) {
+    // Grow part size just enough to fit under MAX_PARTS, rounded up to whole MB.
+    const needed = Math.ceil(total / MAX_PARTS);
+    partSize = Math.ceil(needed / (1024 * 1024)) * (1024 * 1024);
+  }
+  const partCount = Math.max(1, Math.ceil(total / partSize));
+  return { partSize, partCount };
 }
 
 // Background transfer: stream the object from R2 straight into a YouTube
@@ -314,6 +341,99 @@ app.post("/api/presign", async (req, res) => {
       { expiresIn: 3600 }
     );
     res.json({ key, url, contentType: ct, size: size || 0 });
+  } catch (err) {
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
+// --- Chunked upload (multipart), browser-driven ----------------------------
+// The browser uploads each part to a presigned URL; the server owns the
+// create/complete calls (which need credentials). Same R2 client, so the same
+// checksum settings that fixed single-PUT 403s apply to part PUTs too.
+
+// MP-1: start a multipart upload. Returns the key, an uploadId, and the part
+// plan (size + count) the browser should slice the file into.
+app.post("/api/multipart/create", async (req, res) => {
+  if (!r2Configured) return res.status(500).json({ error: "R2 not configured (set R2_* env vars)." });
+  if (!refreshToken) return res.status(401).json({ error: "Not authorized yet - click Authorize first." });
+  const { filename, contentType, size } = req.body || {};
+  if (!filename) return res.status(400).json({ error: "Missing filename." });
+
+  const ct = contentType || "application/octet-stream";
+  const key = `uploads/${Date.now()}-${crypto.randomBytes(3).toString("hex")}-${safeName(filename)}`;
+  const { partSize, partCount } = planParts(size);
+  try {
+    const out = await s3.send(new CreateMultipartUploadCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+      ContentType: ct,
+    }));
+    res.json({ key, uploadId: out.UploadId, partSize, partCount });
+  } catch (err) {
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
+// MP-2: sign one part for upload. Signed fresh per part so a long upload never
+// hits URL expiry, and so resuming just signs whatever parts are still missing.
+app.post("/api/multipart/sign-part", async (req, res) => {
+  if (!r2Configured) return res.status(500).json({ error: "R2 not configured." });
+  if (!refreshToken) return res.status(401).json({ error: "Not authorized yet." });
+  const { key, uploadId, partNumber } = req.body || {};
+  const n = Number(partNumber);
+  if (!key || !uploadId || !Number.isInteger(n) || n < 1) {
+    return res.status(400).json({ error: "Missing key, uploadId, or partNumber." });
+  }
+  try {
+    const url = await getSignedUrl(
+      s3,
+      new UploadPartCommand({ Bucket: R2_BUCKET, Key: key, UploadId: uploadId, PartNumber: n }),
+      { expiresIn: 3600 }
+    );
+    res.json({ url });
+  } catch (err) {
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
+// MP-3: finish the upload. The browser sends every part's number + ETag; R2
+// stitches them into the final object. Parts must be sorted ascending.
+app.post("/api/multipart/complete", async (req, res) => {
+  if (!r2Configured) return res.status(500).json({ error: "R2 not configured." });
+  if (!refreshToken) return res.status(401).json({ error: "Not authorized yet." });
+  const { key, uploadId, parts } = req.body || {};
+  if (!key || !uploadId || !Array.isArray(parts) || parts.length === 0) {
+    return res.status(400).json({ error: "Missing key, uploadId, or parts." });
+  }
+  const sorted = parts
+    .map((p) => ({ PartNumber: Number(p.PartNumber), ETag: String(p.ETag || "") }))
+    .filter((p) => Number.isInteger(p.PartNumber) && p.ETag)
+    .sort((a, b) => a.PartNumber - b.PartNumber);
+  if (sorted.length !== parts.length) {
+    return res.status(400).json({ error: "Some parts were missing a number or ETag." });
+  }
+  try {
+    await s3.send(new CompleteMultipartUploadCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+      UploadId: uploadId,
+      MultipartUpload: { Parts: sorted },
+    }));
+    res.json({ ok: true, key });
+  } catch (err) {
+    res.status(500).json({ error: err?.message || String(err) });
+  }
+});
+
+// MP-4: abort an in-progress multipart upload (user cancel / cleanup) so R2
+// doesn't keep orphaned parts around.
+app.post("/api/multipart/abort", async (req, res) => {
+  if (!r2Configured) return res.status(500).json({ error: "R2 not configured." });
+  const { key, uploadId } = req.body || {};
+  if (!key || !uploadId) return res.status(400).json({ error: "Missing key or uploadId." });
+  try {
+    await s3.send(new AbortMultipartUploadCommand({ Bucket: R2_BUCKET, Key: key, UploadId: uploadId }));
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err?.message || String(err) });
   }
