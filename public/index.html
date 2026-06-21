@@ -119,6 +119,9 @@
     .lightbox-x { position:fixed; top:12px; right:18px; color:#fff; font-size:30px; line-height:1; font-weight:300; opacity:.85; }
     .lblrow { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 6px; }
     .ghostbtn { width:auto; flex:none; background:var(--chip); color:var(--accent); border:1px solid var(--border); font-size:12px; font-weight:600; padding:5px 10px; border-radius:8px; cursor:pointer; }
+    .ghostbtn.off { color:var(--text-soft); }
+    .eyeslash { opacity:0; }
+    .ghostbtn.off .eyeslash { opacity:1; }
     .ghostbtn:hover:not(:disabled) { border-color:var(--accent); }
     .ghostbtn:disabled { opacity:.5; cursor:default; }
     .titleview { font-size:14px; color:var(--text); font-weight:600; line-height:1.35; word-break:break-word; flex:1; }
@@ -349,7 +352,7 @@
       <label>Video title</label>
       <div class="lblrow"><span id="thumbTitleView" class="titleview">—</span><button id="newTitleBtn" class="ghostbtn" type="button">↻ New</button></div>
 
-      <div class="lblrow"><label for="overlayText" style="margin:0">On-screen text — one line per row</label><button id="newTextBtn" class="ghostbtn" type="button">↻ New</button></div>
+      <div class="lblrow"><label for="overlayText" style="margin:0">On-screen text — one line per row</label><span style="display:flex;gap:8px"><button id="toggleTextBtn" class="ghostbtn" type="button" title="Hide text" aria-label="Hide text"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:-2px"><path d="M1 8s2.6-4.6 7-4.6S15 8 15 8s-2.6 4.6-7 4.6S1 8 1 8z"/><circle cx="8" cy="8" r="2"/><line class="eyeslash" x1="2" y1="2" x2="14" y2="14"/></svg></button><button id="newTextBtn" class="ghostbtn" type="button">↻ New</button></span></div>
       <textarea id="overlayText" style="min-height:84px" placeholder="The punchy text on the thumbnail"></textarea>
 
       <label>Tap a word to color it · hold &amp; drag to resize</label>
@@ -385,7 +388,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Premiere · v0.45</div>
+    <div class="foot">Magic Premiere · v0.46</div>
   </div>
 
   <script>
@@ -442,6 +445,7 @@
     let selectedCastText = '';    // formatted cast block from the chosen MSM project
     let selectedCrewText = '';    // formatted crew block
     let overlayLines = [];        // [[{t,b}],...] source of truth for the text
+    let overlayHidden = false;   // eye toggle: hide on-screen text (also omits it from the export)
     let frameRound = 0;           // extraction round for “more frame choices”
     let thumbFrameImg = null;     // current background Image
     let thumbPos = 'bl';          // text anchor: [t/m/b][l/c/r]
@@ -1197,10 +1201,16 @@
       // a portrait shows in full with side bars you can zoom into or Extend-fill.
       var ir = img.width / img.height, baseH = H, baseW = H * ir;
       var dw = baseW * bgScale, dh = baseH * bgScale;
-      var covers = dw >= W - 0.5 && dh >= H - 0.5;
+      var cx = (W - dw) / 2, cy = (H - dh) / 2;
+      // Free positioning: the image's CENTER may sit anywhere within the canvas,
+      // so you can push the subject to any side and Extend-fill the exposed gap.
+      var dx = Math.max(-dw / 2, Math.min(W - dw / 2, cx + bgOffsetX));
+      var dy = Math.max(-dh / 2, Math.min(H - dh / 2, cy + bgOffsetY));
+      bgOffsetX = dx - cx; bgOffsetY = dy - cy;
+      // Anything the frame doesn't cover (a portrait's bars, or a gap you opened
+      // by panning) gets a blurred, canvas-filling backdrop so it reads intentional.
+      var covers = dx <= 0.5 && dy <= 0.5 && dx + dw >= W - 0.5 && dy + dh >= H - 0.5;
       if (!covers) {
-        // Zoomed below "cover" — fill the dead space with a blurred, canvas-filling
-        // copy of the same frame so a vertical clip in a wide frame looks intentional.
         var bf = 1.08, fw = baseW * bf, fh = baseH * bf;
         if (CANVAS_FILTER_OK) {
           var prevFilter = ctx.filter;
@@ -1211,14 +1221,6 @@
           ctx.drawImage(img, (W - fw) / 2, (H - fh) / 2, fw, fh);
         }
       }
-      var cx = (W - dw) / 2, cy = (H - dh) / 2;
-      // Cover dimension: keep the original edge-locked pan. Smaller-than-canvas
-      // dimension: keep the image fully on-canvas, centered by default.
-      var dx = (dw >= W) ? Math.min(0, Math.max(W - dw, cx + bgOffsetX))
-                         : Math.max(0, Math.min(W - dw, cx + bgOffsetX));
-      var dy = (dh >= H) ? Math.min(0, Math.max(H - dh, cy + bgOffsetY))
-                         : Math.max(0, Math.min(H - dh, cy + bgOffsetY));
-      bgOffsetX = dx - cx; bgOffsetY = dy - cy;
       ctx.drawImage(img, dx, dy, dw, dh);
     }
 
@@ -1421,22 +1423,19 @@
         ctx.drawImage(gradeCanvas, 0, 0);
       } else { ctx.fillStyle = '#0d0d10'; ctx.fillRect(0, 0, 1280, 720); }
       if (thumbStyle === 'cinematic') {
-        drawScrim(ctx, 1280, 720);
-        drawOverlayClean(ctx, 1280, 720);
+        if (!overlayHidden) { drawScrim(ctx, 1280, 720); drawOverlayClean(ctx, 1280, 720); }
         drawBorder(ctx, 1280, 720, true);
         drawBadge(ctx, 1280, 720, 'tl', true);
       } else if (thumbStyle === 'spotlight') {
-        drawSpotlight(ctx, 1280, 720);
-        drawOverlaySpotlight(ctx, 1280, 720);
+        if (!overlayHidden) { drawSpotlight(ctx, 1280, 720); drawOverlaySpotlight(ctx, 1280, 720); }
         drawBorder(ctx, 1280, 720, true);
         drawBadge(ctx, 1280, 720, 'bl', true);
       } else if (thumbStyle === 'sidebar') {
-        drawSidebarPanel(ctx, 1280, 720);
-        drawOverlaySidebar(ctx, 1280, 720);
+        if (!overlayHidden) { drawSidebarPanel(ctx, 1280, 720); drawOverlaySidebar(ctx, 1280, 720); }
         drawBorder(ctx, 1280, 720, true);
         drawBadge(ctx, 1280, 720, 'bl', true);
       } else {
-        drawOverlayBlocks(ctx, 1280, 720);
+        if (!overlayHidden) drawOverlayBlocks(ctx, 1280, 720);
         drawBorder(ctx, 1280, 720, false);
         drawBadge(ctx, 1280, 720, 'bl', false);
       }
@@ -1734,8 +1733,8 @@
       var ir = img.width / img.height, baseH = H, baseW = H * ir;
       var dw = baseW * bgScale, dh = baseH * bgScale;
       var cx = (W - dw) / 2, cy = (H - dh) / 2;
-      var dx = (dw >= W) ? Math.min(0, Math.max(W - dw, cx + bgOffsetX)) : Math.max(0, Math.min(W - dw, cx + bgOffsetX));
-      var dy = (dh >= H) ? Math.min(0, Math.max(H - dh, cy + bgOffsetY)) : Math.max(0, Math.min(H - dh, cy + bgOffsetY));
+      var dx = Math.max(-dw / 2, Math.min(W - dw / 2, cx + bgOffsetX));
+      var dy = Math.max(-dh / 2, Math.min(H - dh / 2, cy + bgOffsetY));
       var coversX = dx <= 0.5 && dx + dw >= W - 0.5;
       var coversY = dy <= 0.5 && dy + dh >= H - 0.5;
       if (coversX && coversY) return { full: true };
@@ -2084,6 +2083,14 @@
       generateMetadata('', seed).then(function (md) {
         if (md && md.title) { titleInput.value = md.title; lastRawTitle = md.rawTitle || lastRawTitle; setThumbTitleView(); }
       }).catch(function () { }).then(function () { busyDone(); nTitleBtn.disabled = false; });
+    });
+    var toggleTextBtn = document.getElementById('toggleTextBtn');
+    if (toggleTextBtn) toggleTextBtn.addEventListener('click', function () {
+      overlayHidden = !overlayHidden;
+      this.classList.toggle('off', overlayHidden);
+      this.title = overlayHidden ? 'Show text' : 'Hide text';
+      this.setAttribute('aria-label', overlayHidden ? 'Show text' : 'Hide text');
+      drawThumb();
     });
     var nTextBtn = document.getElementById('newTextBtn');
     if (nTextBtn) nTextBtn.addEventListener('click', function () {
