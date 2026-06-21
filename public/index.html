@@ -114,6 +114,13 @@
     .dial .dv { font-size:15px; color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
     .dial:active { border-color:var(--accent); background:var(--accent-soft); }
     .dialhint { font-size:11.5px; color:var(--muted); margin:-2px 0 14px; opacity:.85; }
+    .sec { margin-bottom:14px; }
+    .sec:last-of-type { margin-bottom:0; }
+    .sechead { display:flex; justify-content:space-between; align-items:center; cursor:pointer; font-size:13px; font-weight:700; color:var(--ink); padding:2px 0 12px; user-select:none; -webkit-user-select:none; }
+    .sechead .chev { color:var(--muted); font-size:11px; transition:transform .2s ease; }
+    .sec.collapsed .sechead { padding-bottom:0; color:var(--muted); }
+    .sec.collapsed .chev { transform:rotate(-90deg); }
+    .sec.collapsed .secbody { display:none; }
   </style>
 </head>
 <body>
@@ -136,34 +143,44 @@
 
     <div id="uploadView">
     <div class="card">
-      <label for="video">Video file</label>
-      <div class="filerow">
-        <input type="file" id="video" accept="video/*">
-        <button id="uploadBtn" disabled>Upload</button>
+      <div class="sec" id="secDetails">
+        <div class="sechead">Video &amp; details<span class="chev">&#9662;</span></div>
+        <div class="secbody">
+          <label for="video">Video file</label>
+          <div class="filerow">
+            <input type="file" id="video" accept="video/*">
+            <button id="uploadBtn" disabled>Upload</button>
+          </div>
+
+          <label for="transcript">Transcript (optional)</label>
+          <input type="file" id="transcript" accept=".srt,.vtt,.txt,text/plain">
+
+          <label for="logline">Logline (optional)</label>
+          <input type="text" id="logline" placeholder="One line about the film — used if it has little dialogue">
+
+          <div id="msmRow" style="display:none">
+            <label for="msmProject">Magic Story Maker project <span class="ctlval">— auto-fills cast &amp; crew</span></label>
+            <select id="msmProject"><option value="">— none —</option></select>
+            <p class="genstatus" id="msmStatus" style="margin-top:6px"></p>
+          </div>
+
+          <button id="genBtn" class="secondary" disabled>✨ Generate title &amp; description</button>
+          <p class="genstatus" id="genStatus"></p>
+        </div>
       </div>
 
-      <label for="transcript">Transcript (optional)</label>
-      <input type="file" id="transcript" accept=".srt,.vtt,.txt,text/plain">
+      <div class="sec" id="secReview">
+        <div class="sechead">Title &amp; description<span class="chev">&#9662;</span></div>
+        <div class="secbody">
+          <label for="title">Title</label>
+          <input type="text" id="title" placeholder="My film">
 
-      <label for="logline">Logline (optional)</label>
-      <input type="text" id="logline" placeholder="One line about the film — used if it has little dialogue">
+          <label for="description">Description</label>
+          <textarea id="description" placeholder="Description — chapter timestamps appear here when generated from a timed transcript."></textarea>
 
-      <div id="msmRow" style="display:none">
-        <label for="msmProject">Magic Story Maker project <span class="ctlval">— auto-fills cast &amp; crew</span></label>
-        <select id="msmProject"><option value="">— none —</option></select>
-        <p class="genstatus" id="msmStatus" style="margin-top:6px"></p>
+          <button id="sendBtn" style="display:none">Send to YouTube</button>
+        </div>
       </div>
-
-      <button id="genBtn" class="secondary" disabled>✨ Generate title &amp; description</button>
-      <p class="genstatus" id="genStatus"></p>
-
-      <label for="title">Title</label>
-      <input type="text" id="title" placeholder="My film">
-
-      <label for="description">Description</label>
-      <textarea id="description" placeholder="Description — chapter timestamps appear here when generated from a timed transcript."></textarea>
-
-      <button id="sendBtn" style="display:none">Send to YouTube</button>
 
       <div id="prog1" class="progress">
         <div class="pbar-label"><span id="p1label">Uploading to R2</span><span id="p1pct">0%</span></div>
@@ -252,7 +269,7 @@
       </div>
     </div>
 
-    <div class="foot">v0.23 — step 3</div>
+    <div class="foot">v0.24 — step 3</div>
   </div>
 
   <script>
@@ -740,9 +757,21 @@
         // Thumbnail step becomes available now that the video exists on YouTube.
         thumbVideoId = job.videoId;
         lastUploadKey = key;
+        // Sent to YouTube — fold everything above so the thumbnail step is the focus.
+        setCollapsed('secDetails', true);
+        setCollapsed('secReview', true);
         makeThumbBtn.style.display = 'block';
       }
     }
+
+    // ---- Collapsible step sections ----
+    function setCollapsed(id, on) {
+      var el = document.getElementById(id);
+      if (el) el.classList.toggle('collapsed', on);
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('.sechead'), function (h) {
+      h.addEventListener('click', function () { h.parentNode.classList.toggle('collapsed'); });
+    });
 
     uploadBtn.addEventListener('click', async () => {
       if (!fileInput.files.length) return;
@@ -757,6 +786,7 @@
 
       try {
         const key = await doR2Upload(file);
+        setCollapsed('secDetails', true); // video's in — fold the inputs away
         if (useWhisper) {
           await runTranscribeFlow(key);
           // Pause for review: hide Upload, reveal Send to YouTube.
@@ -764,6 +794,7 @@
           uploadBtn.style.display = 'none';
           sendBtn.style.display = 'block';
           sendBtn.disabled = false;
+          var sr = document.getElementById('secReview'); if (sr) sr.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else {
           await startTransfer(key);
           uploadBtn.disabled = false; updateBtn();
@@ -772,6 +803,7 @@
         result.classList.add('show');
         resultBody.innerHTML = '<p class="err">' + e.message + '</p>';
         resumeBox.classList.remove('show');
+        setCollapsed('secDetails', false); // re-open so they can fix/retry
         uploadBtn.style.display = 'block';
         uploadBtn.disabled = false; updateBtn();
       }
