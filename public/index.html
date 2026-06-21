@@ -128,8 +128,8 @@
     .filerow { display:flex; gap:8px; align-items:stretch; margin-bottom:12px; }
     .filerow input[type=file] { margin-bottom:0; flex:1; min-width:0; }
     .filerow button { width:auto; flex:none; padding:0 20px; white-space:nowrap; }
-    .dialgrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(96px, 1fr)); gap:8px; margin-bottom:10px; }
-    .dial { display:flex; flex-direction:column; align-items:flex-start; gap:1px; background:#101014; border:1px solid var(--line); border-radius:10px; padding:7px 11px; cursor:ew-resize; touch-action:none; user-select:none; -webkit-user-select:none; }
+    .dialgrid { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+    .dial { display:flex; flex-direction:column; align-items:flex-start; flex:0 0 auto; gap:1px; background:#101014; border:1px solid var(--line); border-radius:10px; padding:7px 11px; cursor:ew-resize; touch-action:none; user-select:none; -webkit-user-select:none; }
     .dial .dk { font-size:10.5px; color:var(--muted); font-weight:500; }
     .dial .dv { font-size:15px; color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
     .dial:active { border-color:var(--accent); background:var(--accent-soft); }
@@ -317,7 +317,7 @@
       </div>
     </div>
 
-    <div class="foot">v0.27 — step 3</div>
+    <div class="foot">v0.28 — step 3</div>
   </div>
 
   <script>
@@ -1065,9 +1065,23 @@
       var ir = img.width / img.height, cr = W / H, baseW, baseH;
       if (ir > cr) { baseH = H; baseW = H * ir; } else { baseW = W; baseH = W / ir; }
       var dw = baseW * bgScale, dh = baseH * bgScale;
+      var covers = dw >= W - 0.5 && dh >= H - 0.5;
+      if (!covers) {
+        // Zoomed below "cover" — fill the dead space with a blurred, canvas-filling
+        // copy of the same frame so a vertical clip in a wide frame looks intentional.
+        var prevFilter = ctx.filter;
+        var bf = 1.08, fw = baseW * bf, fh = baseH * bf;
+        ctx.filter = 'blur(22px) brightness(0.62)';
+        ctx.drawImage(img, (W - fw) / 2, (H - fh) / 2, fw, fh);
+        ctx.filter = prevFilter;
+      }
       var cx = (W - dw) / 2, cy = (H - dh) / 2;
-      var dx = Math.min(0, Math.max(W - dw, cx + bgOffsetX));
-      var dy = Math.min(0, Math.max(H - dh, cy + bgOffsetY));
+      // Cover dimension: keep the original edge-locked pan. Smaller-than-canvas
+      // dimension: keep the image fully on-canvas, centered by default.
+      var dx = (dw >= W) ? Math.min(0, Math.max(W - dw, cx + bgOffsetX))
+                         : Math.max(0, Math.min(W - dw, cx + bgOffsetX));
+      var dy = (dh >= H) ? Math.min(0, Math.max(H - dh, cy + bgOffsetY))
+                         : Math.max(0, Math.min(H - dh, cy + bgOffsetY));
       bgOffsetX = dx - cx; bgOffsetY = dy - cy;
       ctx.drawImage(img, dx, dy, dw, dh);
     }
@@ -1408,6 +1422,24 @@
       });
     }
 
+    // Build a simple overlay from the title/filename — used when the AI overlay
+    // call errors or returns nothing, so the text box is never left blank.
+    function fallbackOverlay() {
+      var src = (lastRawTitle || titleInput.value || '').trim();
+      if (!src) {
+        var fn = (fileInput.files[0] && fileInput.files[0].name) || '';
+        var dot = fn.lastIndexOf('.'); if (dot > 0) fn = fn.slice(0, dot);
+        src = fn.split('_').join(' ').split('-').join(' ').trim();
+      }
+      if (!src) return [];
+      var words = src.split(' ').filter(function (w) { return w.length; }).slice(0, 6);
+      if (!words.length) return [];
+      var toLine = function (arr) { return arr.map(function (w) { return { t: w.toUpperCase(), b: false }; }); };
+      var mid = Math.ceil(words.length / 2);
+      var l1 = words.slice(0, mid), l2 = words.slice(mid);
+      return l2.length ? [toLine(l1), toLine(l2)] : [toLine(l1)];
+    }
+
     async function startThumbFlow() {
       thumbCard.style.display = 'block';
       thumbCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1420,15 +1452,26 @@
 
       var textP = fetch('/api/thumb/text', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: lastRawTitle || titleInput.value || '', synopsis: lastSynopsis || '' })
+        body: JSON.stringify({ title: lastRawTitle || titleInput.value || '', synopsis: lastSynopsis || descInput.value || '' })
       }).then(function (r) { return r.json(); }).then(function (res) {
-        if (res.lines && res.lines.length) {
+        if (res && res.lines && res.lines.length) {
           overlayLines = res.lines.map(function (line) { return line.map(function (w) { return { t: String(w.t || ''), b: !!w.b }; }); });
-          document.getElementById('overlayText').value = overlayLinesToText(overlayLines);
-          renderChips();
-          drawThumb();
+        } else {
+          // AI gave nothing (or errored) — drop in a starter from the title so it's never blank.
+          overlayLines = fallbackOverlay();
+          if (res && res.error) {
+            thumbStatus.innerHTML = '<span style="color:#ff9f0a">Couldn\'t auto-write the text (' + res.error + '). Added a starter from your title — edit it below.</span>';
+          }
         }
-      }).catch(function () { });
+        document.getElementById('overlayText').value = overlayLinesToText(overlayLines);
+        renderChips();
+        drawThumb();
+      }).catch(function () {
+        overlayLines = fallbackOverlay();
+        document.getElementById('overlayText').value = overlayLinesToText(overlayLines);
+        renderChips();
+        drawThumb();
+      });
 
       var framesP = fetch('/api/thumb/frames', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1598,7 +1641,7 @@
 
     var pct = function (v) { return Math.round(v * 100) + '%'; };
     var liveGrade = function () { scheduleGrade(false); }, finalGrade = function () { scheduleGrade(true); };
-    makeDial('dZoom', { get: function () { return bgScale; }, set: function (v) { bgScale = v; }, min: 1, max: 2.6, step: 0.05, def: 1, fmt: function (v) { return v.toFixed(1) + '\u00d7'; }, onInput: liveGrade, onChange: finalGrade });
+    makeDial('dZoom', { get: function () { return bgScale; }, set: function (v) { bgScale = v; }, min: 0.3, max: 2.6, step: 0.05, def: 1, fmt: function (v) { return v.toFixed(1) + '\u00d7'; }, onInput: liveGrade, onChange: finalGrade });
     makeDial('dSat', { get: function () { return grade.sat; }, set: function (v) { grade.sat = v; }, min: 0, max: 2, step: 0.05, def: 1, fmt: pct, onInput: liveGrade, onChange: finalGrade });
     makeDial('dCon', { get: function () { return grade.contrast; }, set: function (v) { grade.contrast = v; }, min: 0.5, max: 1.8, step: 0.05, def: 1, fmt: pct, onInput: liveGrade, onChange: finalGrade });
     makeDial('dBri', { get: function () { return grade.bright; }, set: function (v) { grade.bright = v; }, min: 0.5, max: 1.5, step: 0.05, def: 1, fmt: pct, onInput: liveGrade, onChange: finalGrade });
