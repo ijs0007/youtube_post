@@ -42,7 +42,7 @@ import pg from "pg";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_VERSION = "0.20";
+const APP_VERSION = "0.21";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -1158,7 +1158,7 @@ app.post("/api/thumb/text", async (req, res) => {
     "You write the SHORT punchy text overlay that goes on a YouTube thumbnail for a fictional narrative short film (channel: Isaiah Jeremiah).",
     "Given the film's title and synopsis, write a thumbnail hook: 3 to 8 words total, broken into 2-3 short lines, ALL CAPS or strong Title Case, dramatic and curiosity-driven. It is NOT the full title — it is a bold, scannable hook (e.g. \"HE LOST HER / & BECAME / SUICIDAL\").",
     "Choose 1-3 of the most emotionally charged words to highlight in the accent color.",
-    'Respond with ONE JSON object: {"lines":[[{"t":"WORD","b":true},{"t":"WORD","b":false}], ...]} where each inner array is one line of words top-to-bottom, t is the word text, and b is true if that word should be highlighted. No other keys, no markdown fences, no commentary.',
+    'Provide the overlay by calling the emit_overlay tool. Each inner array is one line of words top-to-bottom; "t" is the word text and "b" is true if that word should be highlighted in the accent color.',
   ].join("\n");
   const userContent = "Title: " + (t || "(none)") + "\nSynopsis: " + (s || "(none)");
 
@@ -1166,18 +1166,54 @@ app.post("/api/thumb/text", async (req, res) => {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: METADATA_MODEL, max_tokens: 400, system, messages: [{ role: "user", content: userContent }] }),
+      body: JSON.stringify({
+        model: METADATA_MODEL,
+        max_tokens: 400,
+        system,
+        tools: [{
+          name: "emit_overlay",
+          description: "Return the short punchy thumbnail text overlay.",
+          input_schema: {
+            type: "object",
+            properties: {
+              lines: {
+                type: "array",
+                description: "2-3 lines, top to bottom. Each line is an array of word objects.",
+                items: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      t: { type: "string", description: "The word." },
+                      b: { type: "boolean", description: "true to highlight this word in the accent color." },
+                    },
+                    required: ["t", "b"],
+                  },
+                },
+              },
+            },
+            required: ["lines"],
+          },
+        }],
+        tool_choice: { type: "tool", name: "emit_overlay" },
+        messages: [{ role: "user", content: userContent }],
+      }),
     });
     if (!r.ok) {
       const errText = await r.text();
       return res.status(502).json({ error: `AI request failed (HTTP ${r.status}): ${errText.slice(0, 200)}` });
     }
     const data = await r.json();
-    let raw = (data.content || []).filter((b) => b && b.type === "text").map((b) => b.text).join("").trim();
-    const open = raw.indexOf("{"), close = raw.lastIndexOf("}");
-    if (open !== -1 && close > open) raw = raw.slice(open, close + 1);
+    const toolBlock = (data.content || []).find((b) => b && b.type === "tool_use" && b.input);
     let parsed;
-    try { parsed = JSON.parse(raw); } catch { return res.status(502).json({ error: "AI returned unparseable overlay." }); }
+    if (toolBlock) {
+      parsed = toolBlock.input;
+    } else {
+      let raw = (data.content || []).filter((b) => b && b.type === "text").map((b) => b.text).join("").trim();
+      const open = raw.indexOf("{"), close = raw.lastIndexOf("}");
+      if (open !== -1 && close > open) raw = raw.slice(open, close + 1);
+      try { parsed = JSON.parse(raw); } catch { return res.status(502).json({ error: "AI returned unparseable overlay." }); }
+    }
     // Normalize into clean lines of {t,b}.
     const lines = Array.isArray(parsed.lines) ? parsed.lines : [];
     const clean = lines
