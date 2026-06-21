@@ -314,6 +314,14 @@
         <button type="button" data-style="sidebar">Sidebar</button>
         <button type="button" data-style="blocks">Blocks</button>
       </div>
+      <label>Border</label>
+      <div id="borderToggle" class="segmented">
+        <button type="button" data-border="brand" class="sel">Brand</button>
+        <button type="button" data-border="white">White</button>
+        <button type="button" data-border="black">Black</button>
+        <button type="button" data-border="accent">Accent</button>
+        <button type="button" data-border="none">None</button>
+      </div>
       <div class="thumbsticky"><canvas id="thumbCanvas" width="1280" height="720"></canvas></div>
       <p class="genstatus" id="thumbStatus"></p>
 
@@ -390,7 +398,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Premiere · v0.47</div>
+    <div class="foot">Magic Premiere · v0.48</div>
   </div>
 
   <script>
@@ -458,6 +466,7 @@
     let bgOffsetY = 0;
     let textScale = 1;           // global text-size multiplier
     let accentColor = '#0eaaf5'; // highlight color for popped words
+    let borderStyle = 'brand'; // frame border: brand | white | black | accent | none
     let grade = { sat: 1, contrast: 1, bright: 1, sharp: 0 }; // non-destructive image adjustments
     let gradeReady = false;
     let gradeCanvas = document.createElement('canvas'); gradeCanvas.width = 1280; gradeCanvas.height = 720;
@@ -1326,9 +1335,14 @@
     }
 
     function drawBorder(ctx, W, H, thin) {
+      if (borderStyle === 'none') return;
       var bw = thin ? 11 : 20, inset = thin ? 7 : 12, r = thin ? 28 : 36;
+      var col = borderStyle === 'white' ? '#ffffff'
+              : borderStyle === 'black' ? '#0a0a0a'
+              : borderStyle === 'accent' ? accentColor
+              : '#f45911';
       roundRectPath(ctx, inset, inset, W - 2 * inset, H - 2 * inset, r);
-      ctx.lineWidth = bw; ctx.strokeStyle = '#f45911'; ctx.stroke();
+      ctx.lineWidth = bw; ctx.strokeStyle = col; ctx.stroke();
     }
 
     function drawBadge(ctx, W, H, corner, subtle) {
@@ -1973,6 +1987,19 @@
           var defPos = { cinematic: 'bl', spotlight: 'mc', sidebar: 'ml', blocks: 'tr' };
           thumbPos = defPos[thumbStyle] || 'bl'; // sensible default per style
           buildPosGrid();
+          drawThumb();
+        });
+      });
+    })();
+
+    (function () {
+      var seg = document.getElementById('borderToggle');
+      if (!seg) return;
+      Array.prototype.forEach.call(seg.querySelectorAll('button'), function (btn) {
+        btn.addEventListener('click', function () {
+          borderStyle = btn.getAttribute('data-border');
+          Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { b.classList.remove('sel'); });
+          btn.classList.add('sel');
           drawThumb();
         });
       });
