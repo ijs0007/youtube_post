@@ -134,7 +134,7 @@
     .framestrip img { height:62px; border-radius:8px; cursor:pointer; border:2px solid transparent; flex:none; }
     .framestrip img.sel { border-color:var(--accent); }
     .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
-    .chip { width:auto; background:var(--chip); color:var(--text); border:1px solid var(--border); padding:6px 11px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; touch-action:pan-y; user-select:none; -webkit-user-select:none; }
+    .chip { width:auto; background:var(--chip); color:var(--text); border:1px solid var(--border); padding:6px 11px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; touch-action:none; user-select:none; -webkit-user-select:none; }
     .chip.blue { background:rgba(14,170,245,.16); color:#0eaaf5; border-color:#0eaaf5; }
     .chip.scrubbing { border-color:var(--accent); color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
     .posgrid { display:grid; grid-template-columns:repeat(3,40px); gap:6px; margin-bottom:18px; }
@@ -384,7 +384,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Premiere · v0.41</div>
+    <div class="foot">Magic Premiere · v0.42</div>
   </div>
 
   <script>
@@ -1161,6 +1161,36 @@
     // Background with zoom + pan. Offsets are clamped so the image always fully
     // covers the canvas (no black gaps), and the clamped value is written back so
     // dragging stays bounded. Zoom past the film's own letterbox bars here.
+    // iOS Safari (pre-17) ignores canvas ctx.filter; detect once so we can grade pixels manually instead.
+    var CANVAS_FILTER_OK = (function () {
+      try {
+        var t = document.createElement('canvas'); t.width = t.height = 2;
+        var g = t.getContext('2d');
+        g.fillStyle = '#fff'; g.fillRect(0, 0, 2, 2);
+        g.filter = 'brightness(0)'; g.fillStyle = '#fff'; g.fillRect(0, 0, 2, 2);
+        g.filter = 'none';
+        return g.getImageData(0, 0, 1, 1).data[0] < 10;
+      } catch (_) { return false; }
+    })();
+    // Manual saturate -> contrast -> brightness (matches CSS filter order) for browsers without ctx.filter.
+    function applyGradeManual(gctx, W, H) {
+      var s = grade.sat, c = grade.contrast, br = grade.bright;
+      if (s === 1 && c === 1 && br === 1) return;
+      var id = gctx.getImageData(0, 0, W, H), d = id.data;
+      var a0 = 0.213 + 0.787 * s, a1 = 0.715 - 0.715 * s, a2 = 0.072 - 0.072 * s;
+      var b0 = 0.213 - 0.213 * s, b1 = 0.715 + 0.285 * s, b2 = 0.072 - 0.072 * s;
+      var k0 = 0.213 - 0.213 * s, k1 = 0.715 - 0.715 * s, k2 = 0.072 + 0.928 * s;
+      for (var i = 0; i < d.length; i += 4) {
+        var r = d[i], g = d[i + 1], bl = d[i + 2];
+        var nr = a0 * r + a1 * g + a2 * bl, ng = b0 * r + b1 * g + b2 * bl, nb = k0 * r + k1 * g + k2 * bl;
+        nr = (nr - 127.5) * c + 127.5; ng = (ng - 127.5) * c + 127.5; nb = (nb - 127.5) * c + 127.5;
+        nr *= br; ng *= br; nb *= br;
+        d[i] = nr < 0 ? 0 : (nr > 255 ? 255 : nr);
+        d[i + 1] = ng < 0 ? 0 : (ng > 255 ? 255 : ng);
+        d[i + 2] = nb < 0 ? 0 : (nb > 255 ? 255 : nb);
+      }
+      gctx.putImageData(id, 0, 0);
+    }
     function drawBackground(ctx, img, W, H) {
       var ir = img.width / img.height, cr = W / H, baseW, baseH;
       if (ir > cr) { baseH = H; baseW = H * ir; } else { baseW = W; baseH = W / ir; }
@@ -1169,11 +1199,15 @@
       if (!covers) {
         // Zoomed below "cover" — fill the dead space with a blurred, canvas-filling
         // copy of the same frame so a vertical clip in a wide frame looks intentional.
-        var prevFilter = ctx.filter;
         var bf = 1.08, fw = baseW * bf, fh = baseH * bf;
-        ctx.filter = 'blur(22px) brightness(0.62)';
-        ctx.drawImage(img, (W - fw) / 2, (H - fh) / 2, fw, fh);
-        ctx.filter = prevFilter;
+        if (CANVAS_FILTER_OK) {
+          var prevFilter = ctx.filter;
+          ctx.filter = 'blur(22px) brightness(0.62)';
+          ctx.drawImage(img, (W - fw) / 2, (H - fh) / 2, fw, fh);
+          ctx.filter = prevFilter;
+        } else {
+          ctx.drawImage(img, (W - fw) / 2, (H - fh) / 2, fw, fh);
+        }
       }
       var cx = (W - dw) / 2, cy = (H - dh) / 2;
       // Cover dimension: keep the original edge-locked pan. Smaller-than-canvas
@@ -1216,9 +1250,14 @@
       if (!thumbFrameImg || !thumbFrameImg.complete || !thumbFrameImg.naturalWidth) { gradeReady = false; return; }
       var gctx = gradeCanvas.getContext('2d');
       gctx.clearRect(0, 0, 1280, 720);
-      gctx.filter = 'saturate(' + grade.sat + ') contrast(' + grade.contrast + ') brightness(' + grade.bright + ')';
-      drawBackground(gctx, thumbFrameImg, 1280, 720);
-      gctx.filter = 'none';
+      if (CANVAS_FILTER_OK) {
+        gctx.filter = 'saturate(' + grade.sat + ') contrast(' + grade.contrast + ') brightness(' + grade.bright + ')';
+        drawBackground(gctx, thumbFrameImg, 1280, 720);
+        gctx.filter = 'none';
+      } else {
+        drawBackground(gctx, thumbFrameImg, 1280, 720);
+        applyGradeManual(gctx, 1280, 720);
+      }
       if (sharpen && grade.sharp > 0) sharpenImageData(gctx, 1280, 720, grade.sharp);
       gradeReady = true;
     }
@@ -1454,7 +1493,7 @@
           chip.textContent = w.t;
           styleChip(chip, w.b);
           var SENS = 180, SMIN = 0.5, SMAX = 2.2;
-          var downX = 0, downS = 1, lastX = 0, holdT = null, scrubbing = false, moved = false, suppress = false;
+          var downX = 0, downS = 1, lastX = 0, downY = 0, holdT = null, scrubbing = false, moved = false, suppress = false, lastTap = 0;
           function endScrub() {
             if (!scrubbing) return;
             scrubbing = false; suppress = true;
@@ -1463,7 +1502,7 @@
             drawThumb();
           }
           chip.addEventListener('pointerdown', function (e) {
-            downX = lastX = e.clientX; downS = overlayLines[li][wi].s || 1;
+            downX = lastX = e.clientX; downY = e.clientY; downS = overlayLines[li][wi].s || 1;
             scrubbing = false; moved = false; suppress = false;
             try { chip.setPointerCapture(e.pointerId); } catch (_) {}
             clearTimeout(holdT);
@@ -1476,7 +1515,7 @@
           chip.addEventListener('pointermove', function (e) {
             lastX = e.clientX;
             if (!scrubbing) {
-              if (Math.abs(e.clientX - downX) > 8) { moved = true; clearTimeout(holdT); }
+              if (Math.abs(e.clientX - downX) > 8 || Math.abs(e.clientY - downY) > 10) { moved = true; clearTimeout(holdT); }
               return;
             }
             e.preventDefault();
@@ -1497,11 +1536,9 @@
             if (suppress) { suppress = false; e.preventDefault(); e.stopPropagation(); return; }
             overlayLines[li][wi].b = !overlayLines[li][wi].b;
             styleChip(chip, overlayLines[li][wi].b);
-            drawThumb();
-          });
-          chip.addEventListener('dblclick', function (e) {
-            e.preventDefault();
-            overlayLines[li][wi].s = 1;
+            var now = Date.now();
+            if (now - lastTap < 320) { overlayLines[li][wi].s = 1; lastTap = 0; }
+            else { lastTap = now; }
             drawThumb();
           });
           box.appendChild(chip);
