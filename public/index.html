@@ -19,6 +19,12 @@
     .wrap { max-width:540px; margin:0 auto; }
     h1 { font-size:23px; font-weight:700; letter-spacing:-.02em; margin:0 0 3px; }
     .sub { color:var(--muted); margin:0 0 20px; font-size:14px; }
+    .hrow { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+    .hrow h1 { margin:0; }
+    .help { width:26px; height:26px; flex:none; padding:0; border-radius:50%; background:#23232b; color:var(--muted); font-weight:700; font-size:14px; line-height:1; }
+    .help:hover { background:#2c2c34; color:var(--ink); }
+    .helppanel { background:#15151a; border:1px solid #222229; border-radius:14px; padding:14px 16px; margin-bottom:16px; font-size:13px; line-height:1.55; color:var(--muted); }
+    .helppanel b { color:var(--ink); font-weight:600; }
     .card {
       background:#15151a; border:1px solid #222229; border-radius:16px; padding:18px; margin-bottom:14px;
       box-shadow:0 1px 3px rgba(0,0,0,.4);
@@ -37,7 +43,15 @@
       width:100%; font:inherit; color:var(--ink); padding:10px 12px; border:1px solid var(--line);
       border-radius:10px; background:#101014; margin-bottom:8px; cursor:pointer;
     }
-    input[type=file] { padding:8px 12px; }
+    input[type=file] { padding:7px 10px; font-size:13px; color:var(--muted); }
+    input[type=file]::file-selector-button,
+    input[type=file]::-webkit-file-upload-button {
+      font:inherit; font-weight:600; font-size:13px; border:0; border-radius:8px;
+      padding:6px 13px; margin-right:11px; background:#2a2a33; color:#cfcfd6;
+      cursor:pointer; transition:background .15s;
+    }
+    input[type=file]:hover::file-selector-button,
+    input[type=file]:hover::-webkit-file-upload-button { background:#34343d; }
     input[type=text]:focus, textarea:focus, select:focus { outline:none; border-color:var(--accent); }
     input::placeholder, textarea::placeholder { color:#6a6a73; }
     button {
@@ -125,8 +139,13 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>YouTube Uploader</h1>
-    <p class="sub">Step 3 — upload, auto-transcribe, and auto-write the title, description & chapters.</p>
+    <div class="hrow">
+      <h1>YouTube Uploader</h1>
+      <button id="helpBtn" class="help" type="button" aria-label="How it works">?</button>
+    </div>
+    <div id="helpPanel" class="helppanel" style="display:none">
+      Upload a finished film — it goes straight to cloud storage, then transfers to YouTube as a <b>private</b> draft. If the film has dialogue, it auto-transcribes and writes the title, description &amp; chapters for you to review (or add your own transcript to skip that). Large files upload in chunks automatically. Last step: make a thumbnail.
+    </div>
 
     <div class="tabs">
       <button class="tab active" id="tabUpload">Upload</button>
@@ -182,29 +201,34 @@
         </div>
       </div>
 
-      <div id="prog1" class="progress">
-        <div class="pbar-label"><span id="p1label">Uploading to R2</span><span id="p1pct">0%</span></div>
-        <div class="pbar"><span id="p1bar"></span></div>
-      </div>
+      <div class="sec" id="secStatus" style="display:none">
+        <div class="sechead">Status<span class="chev">&#9662;</span></div>
+        <div class="secbody">
+          <div id="prog1" class="progress">
+            <div class="pbar-label"><span id="p1label">Uploading to R2</span><span id="p1pct">0%</span></div>
+            <div class="pbar"><span id="p1bar"></span></div>
+          </div>
 
-      <div id="resumeBox" class="resumebox">
-        <div class="resumetext" id="resumeText">Upload paused.</div>
-        <button id="resumeBtn" class="secondary" style="margin-bottom:8px">Resume upload</button>
-        <a href="#" id="cancelLink" class="cancel">Cancel this upload</a>
-      </div>
+          <div id="resumeBox" class="resumebox">
+            <div class="resumetext" id="resumeText">Upload paused.</div>
+            <button id="resumeBtn" class="secondary" style="margin-bottom:8px">Resume upload</button>
+            <a href="#" id="cancelLink" class="cancel">Cancel this upload</a>
+          </div>
 
-      <div id="progT" class="progress">
-        <div class="pbar-label"><span id="pTlabel">Transcribing</span></div>
-        <div class="pbar indet" id="pTwrap"><span id="pTbar"></span></div>
-      </div>
+          <div id="progT" class="progress">
+            <div class="pbar-label"><span id="pTlabel">Transcribing</span></div>
+            <div class="pbar indet" id="pTwrap"><span id="pTbar"></span></div>
+          </div>
 
-      <div id="prog2" class="progress">
-        <div class="pbar-label"><span id="p2label">Sending to YouTube</span><span id="p2pct"></span></div>
-        <div class="pbar" id="p2wrap"><span id="p2bar"></span></div>
-      </div>
+          <div id="prog2" class="progress">
+            <div class="pbar-label"><span id="p2label">Sending to YouTube</span><span id="p2pct"></span></div>
+            <div class="pbar" id="p2wrap"><span id="p2bar"></span></div>
+          </div>
 
-      <div id="result" class="result"><div id="resultBody"></div></div>
-      <button id="makeThumbBtn" style="display:none; margin-top:14px">🎨 Make thumbnail</button>
+          <div id="result" class="result"><div id="resultBody"></div></div>
+          <button id="makeThumbBtn" style="display:none; margin-top:14px">🎨 Make thumbnail</button>
+        </div>
+      </div>
     </div>
 
     <div id="thumbCard" class="card" style="display:none">
@@ -269,7 +293,7 @@
       </div>
     </div>
 
-    <div class="foot">v0.24 — step 3</div>
+    <div class="foot">v0.25 — step 3</div>
   </div>
 
   <script>
@@ -603,6 +627,7 @@
         fmtBytes(done * state.partSize) + ' of ' + fmtBytes(state.file.size) +
         '). Your connection may have dropped. The finished parts are safe.';
       resumeBox.classList.add('show');
+      if (typeof showStatus === 'function') showStatus();
     }
 
     async function abortMultipart(state) {
@@ -772,6 +797,14 @@
     Array.prototype.forEach.call(document.querySelectorAll('.sechead'), function (h) {
       h.addEventListener('click', function () { h.parentNode.classList.toggle('collapsed'); });
     });
+    document.getElementById('helpBtn').addEventListener('click', function () {
+      var p = document.getElementById('helpPanel');
+      p.style.display = (p.style.display === 'none') ? 'block' : 'none';
+    });
+    function showStatus() {
+      var s = document.getElementById('secStatus');
+      if (s) { s.style.display = 'block'; s.classList.remove('collapsed'); }
+    }
 
     uploadBtn.addEventListener('click', async () => {
       if (!fileInput.files.length) return;
@@ -783,6 +816,7 @@
       result.classList.remove('show'); resultBody.innerHTML = '';
       progT.classList.remove('show'); prog2.classList.remove('show');
       resumeBox.classList.remove('show');
+      showStatus();
 
       try {
         const key = await doR2Upload(file);
@@ -1373,7 +1407,8 @@
 
     makeThumbBtn.addEventListener('click', function () {
       makeThumbBtn.disabled = true;
-      startThumbFlow().catch(function () { }).then(function () { makeThumbBtn.disabled = false; });
+      setCollapsed('secStatus', true); // fold the upload status away — thumbnail is the focus now
+      startThumbFlow().catch(function () { setCollapsed('secStatus', false); }).then(function () { makeThumbBtn.disabled = false; });
     });
 
     document.getElementById('overlayText').addEventListener('input', function (e) {
