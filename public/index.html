@@ -134,8 +134,9 @@
     .framestrip img { height:62px; border-radius:8px; cursor:pointer; border:2px solid transparent; flex:none; }
     .framestrip img.sel { border-color:var(--accent); }
     .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
-    .chip { width:auto; background:var(--chip); color:var(--text); border:1px solid var(--border); padding:6px 11px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+    .chip { width:auto; background:var(--chip); color:var(--text); border:1px solid var(--border); padding:6px 11px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; touch-action:pan-y; user-select:none; -webkit-user-select:none; }
     .chip.blue { background:rgba(14,170,245,.16); color:#0eaaf5; border-color:#0eaaf5; }
+    .chip.scrubbing { border-color:var(--accent); color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
     .posgrid { display:grid; grid-template-columns:repeat(3,40px); gap:6px; margin-bottom:18px; }
     .posgrid button { width:40px; height:40px; background:var(--chip); color:var(--text-soft); padding:0; border-radius:8px; font-size:16px; line-height:1; }
     .posgrid button.sel { background:var(--accent); color:#fff; }
@@ -350,7 +351,7 @@
       <div class="lblrow"><label for="overlayText" style="margin:0">On-screen text — one line per row</label><button id="newTextBtn" class="ghostbtn" type="button">↻ New</button></div>
       <textarea id="overlayText" style="min-height:84px" placeholder="The punchy text on the thumbnail"></textarea>
 
-      <label>Tap a word to highlight it</label>
+      <label>Tap a word to color it · hold &amp; drag to resize</label>
       <div id="wordChips" class="chips"></div>
 
       <label>Highlight color</label>
@@ -383,7 +384,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Premiere · v0.40</div>
+    <div class="foot">Magic Premiere · v0.41</div>
   </div>
 
   <script>
@@ -1106,17 +1107,39 @@
     // Pure layout: each line auto-fits its font so its text spans ~targetW (so a
     // 1-word line renders big, a 4-word line smaller — like the real channel),
     // then blocks stack and anchor by position. measure(str,fs)->{w,asc,desc}.
+    // Measure a line at a base font, honoring each word's per-word scale (w.s).
+    // Width is linear in baseFs, so the caller can scale baseFs to hit a target width.
+    function measureScaledLine(measure, line, baseFs) {
+      var totalW = 0, asc = 0, desc = 0, sp = measure(' ', baseFs).w;
+      for (var k = 0; k < line.length; k++) {
+        var mw = measure(line[k].t, baseFs * (line[k].s || 1));
+        totalW += mw.w + (k < line.length - 1 ? sp : 0);
+        if (mw.asc > asc) asc = mw.asc;
+        if (mw.desc > desc) desc = mw.desc;
+      }
+      return { w: totalW, asc: asc, desc: desc };
+    }
     function layoutOverlay(measure, lines, opts) {
       var blocks = [], totalH = 0;
       for (var i = 0; i < lines.length; i++) {
-        var text = lines[i].map(function (w) { return w.t; }).join(' ');
-        var mMax = measure(text, opts.maxFont);
-        var fs = opts.maxFont;
-        if (mMax.w > opts.targetW) fs = Math.max(opts.minFont, opts.maxFont * (opts.targetW / mMax.w));
-        var m = measure(text, fs);
+        var line = lines[i], hasScale = false;
+        for (var z = 0; z < line.length; z++) { if ((line[z].s || 1) !== 1) { hasScale = true; break; } }
+        var fs, m;
+        if (!hasScale) {
+          var text = line.map(function (w) { return w.t; }).join(' ');
+          var mMax = measure(text, opts.maxFont);
+          fs = opts.maxFont;
+          if (mMax.w > opts.targetW) fs = Math.max(opts.minFont, opts.maxFont * (opts.targetW / mMax.w));
+          m = measure(text, fs);
+        } else {
+          var mMaxS = measureScaledLine(measure, line, opts.maxFont);
+          fs = opts.maxFont;
+          if (mMaxS.w > opts.targetW) fs = Math.max(opts.minFont, opts.maxFont * (opts.targetW / mMaxS.w));
+          m = measureScaledLine(measure, line, fs);
+        }
         var blockW = m.w + 2 * opts.padX;
         var blockH = m.asc + m.desc + 2 * opts.padY;
-        blocks.push({ line: lines[i], fs: fs, asc: m.asc, blockW: blockW, blockH: blockH, x: 0, y: 0 });
+        blocks.push({ line: line, fs: fs, asc: m.asc, blockW: blockW, blockH: blockH, x: 0, y: 0 });
         totalH += blockH + opts.lineGap;
       }
       if (blocks.length) totalH -= opts.lineGap;
@@ -1215,6 +1238,7 @@
         var cx = b.x + opts.padX;
         var spaceW = ctx.measureText(' ').width;
         for (var k = 0; k < b.line.length; k++) {
+          ctx.font = '800 ' + (b.fs * (b.line[k].s || 1)) + 'px Montserrat, sans-serif';
           ctx.fillStyle = b.line[k].b ? accentColor : '#ffffff';
           ctx.fillText(b.line[k].t, cx, baseline);
           cx += ctx.measureText(b.line[k].t).width + spaceW;
@@ -1246,6 +1270,7 @@
         var spaceW = ctx.measureText(' ').width;
         for (var k = 0; k < b.line.length; k++) {
           var w = b.line[k];
+          ctx.font = '800 ' + (b.fs * (w.s || 1)) + 'px Montserrat, sans-serif';
           ctx.fillStyle = 'rgba(0,0,0,0.55)';
           ctx.fillText(w.t, cx + Math.max(2, b.fs * 0.02), baseline + Math.max(3, b.fs * 0.03));
           ctx.fillStyle = w.b ? accentColor : '#ffffff';
@@ -1308,6 +1333,7 @@
         ctx.font = '800 ' + b.fs + 'px Montserrat, sans-serif';
         var baseline = b.y + opts.padY + b.asc, cx = b.x + opts.padX, spaceW = ctx.measureText(' ').width;
         for (var k = 0; k < b.line.length; k++) {
+          ctx.font = '800 ' + (b.fs * (b.line[k].s || 1)) + 'px Montserrat, sans-serif';
           ctx.fillStyle = b.line[k].b ? accentColor : '#ffffff';
           ctx.fillText(b.line[k].t, cx, baseline);
           cx += ctx.measureText(b.line[k].t).width + spaceW;
@@ -1336,6 +1362,7 @@
         ctx.font = '800 ' + b.fs + 'px Montserrat, sans-serif';
         var baseline = b.y + opts.padY + b.asc, cx = b.x + opts.padX, spaceW = ctx.measureText(' ').width;
         for (var k = 0; k < b.line.length; k++) {
+          ctx.font = '800 ' + (b.fs * (b.line[k].s || 1)) + 'px Montserrat, sans-serif';
           ctx.fillStyle = b.line[k].b ? accentColor : '#ffffff';
           ctx.fillText(b.line[k].t, cx, baseline);
           cx += ctx.measureText(b.line[k].t).width + spaceW;
@@ -1386,9 +1413,11 @@
         var words = rows[i].trim().split(' ').filter(function (w) { return w.length; }).slice(0, 8);
         if (!words.length) continue;
         out.push(words.map(function (t) {
-          var b = prevFlat[gi] ? prevFlat[gi].b : false;
+          var pf = prevFlat[gi];
+          var b = pf ? pf.b : false;
+          var sc = pf ? (pf.s || 1) : 1;
           gi++;
-          return { t: t, b: b };
+          return { t: t, b: b, s: sc };
         }));
         if (out.length >= 5) break;
       }
@@ -1424,9 +1453,55 @@
           chip.className = 'chip';
           chip.textContent = w.t;
           styleChip(chip, w.b);
-          chip.addEventListener('click', function () {
+          var SENS = 180, SMIN = 0.5, SMAX = 2.2;
+          var downX = 0, downS = 1, lastX = 0, holdT = null, scrubbing = false, moved = false, suppress = false;
+          function endScrub() {
+            if (!scrubbing) return;
+            scrubbing = false; suppress = true;
+            chip.classList.remove('scrubbing');
+            chip.textContent = overlayLines[li][wi].t;
+            drawThumb();
+          }
+          chip.addEventListener('pointerdown', function (e) {
+            downX = lastX = e.clientX; downS = overlayLines[li][wi].s || 1;
+            scrubbing = false; moved = false; suppress = false;
+            try { chip.setPointerCapture(e.pointerId); } catch (_) {}
+            clearTimeout(holdT);
+            holdT = setTimeout(function () {
+              if (moved) return;
+              scrubbing = true; downX = lastX;
+              chip.classList.add('scrubbing');
+            }, 240);
+          });
+          chip.addEventListener('pointermove', function (e) {
+            lastX = e.clientX;
+            if (!scrubbing) {
+              if (Math.abs(e.clientX - downX) > 8) { moved = true; clearTimeout(holdT); }
+              return;
+            }
+            e.preventDefault();
+            var ns = downS + (e.clientX - downX) / SENS;
+            ns = Math.max(SMIN, Math.min(SMAX, ns));
+            ns = Math.round(ns / 0.05) * 0.05;
+            overlayLines[li][wi].s = ns;
+            chip.textContent = Math.round(ns * 100) + '%';
+            drawThumb();
+          });
+          chip.addEventListener('pointerup', function () {
+            clearTimeout(holdT);
+            if (scrubbing) endScrub();
+            else if (moved) suppress = true;
+          });
+          chip.addEventListener('pointercancel', function () { clearTimeout(holdT); endScrub(); });
+          chip.addEventListener('click', function (e) {
+            if (suppress) { suppress = false; e.preventDefault(); e.stopPropagation(); return; }
             overlayLines[li][wi].b = !overlayLines[li][wi].b;
             styleChip(chip, overlayLines[li][wi].b);
+            drawThumb();
+          });
+          chip.addEventListener('dblclick', function (e) {
+            e.preventDefault();
+            overlayLines[li][wi].s = 1;
             drawThumb();
           });
           box.appendChild(chip);
