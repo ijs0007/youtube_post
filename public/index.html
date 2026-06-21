@@ -3,17 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0d0d10">
+  <meta name="theme-color" content="#1a1a1c">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <title>YouTube Uploader</title>
+  <title>Magic Premiere</title>
   <style>
-    :root { --accent:#2f80ff; --accent-soft:rgba(47,128,255,.14); --ink:#f0f0f3; --muted:#9a9aa4; --line:#2a2a33; color-scheme:dark; }
+    :root {
+      --bg:#faf9f5; --surface:#ffffff; --field:#ffffff; --chip:#f0eee8;
+      --border:rgba(0,0,0,0.10); --text:#1a1a18; --text-soft:#6b6a64;
+      --accent:#2f80ff; --accent-soft:rgba(47,128,255,.14); --accent-text:#ffffff; --good:#2e9e6b;
+      --ink:var(--text); --muted:var(--text-soft); --line:var(--border);
+      color-scheme:light dark;
+    }
+    body.dark {
+      --bg:#1a1a1c; --surface:#252528; --field:#2e2e32; --chip:#34343a;
+      --border:rgba(255,255,255,0.14); --text:#ececec; --text-soft:#9a9a9e;
+      --accent-soft:rgba(47,128,255,.22); --good:#43c48a;
+    }
     * { box-sizing:border-box; }
     body {
       font:15px/1.5 "Poppins",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-      color:var(--ink); background:#0d0d10; margin:0; padding:24px 16px;
+      color:var(--ink); background:var(--bg); margin:0; padding:24px 16px;
       -webkit-font-smoothing:antialiased;
     }
     .wrap { max-width:540px; margin:0 auto; }
@@ -21,12 +32,12 @@
     .sub { color:var(--muted); margin:0 0 20px; font-size:14px; }
     .hrow { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
     .hrow h1 { margin:0; }
-    .help { width:26px; height:26px; flex:none; padding:0; border-radius:50%; background:#23232b; color:var(--muted); font-weight:700; font-size:14px; line-height:1; }
-    .help:hover { background:#2c2c34; color:var(--ink); }
-    .helppanel { background:#15151a; border:1px solid #222229; border-radius:14px; padding:14px 16px; margin-bottom:16px; font-size:13px; line-height:1.55; color:var(--muted); }
+    .help { width:26px; height:26px; flex:none; padding:0; border-radius:50%; background:var(--border); color:var(--muted); font-weight:700; font-size:14px; line-height:1; }
+    .help:hover { background:var(--chip); color:var(--ink); }
+    .helppanel { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:16px; font-size:13px; line-height:1.55; color:var(--muted); }
     .helppanel b { color:var(--ink); font-weight:600; }
     .card {
-      background:#15151a; border:1px solid #222229; border-radius:16px; padding:18px; margin-bottom:14px;
+      background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:14px;
       box-shadow:0 1px 3px rgba(0,0,0,.4);
     }
     .status { display:flex; align-items:center; gap:9px; font-size:14px; }
@@ -37,33 +48,33 @@
     .gradelbl { font-weight:500; font-size:12px; margin:6px 0 4px; opacity:.9; }
     input[type=text], input[type=file] {
       width:100%; font:inherit; color:var(--ink); padding:10px 12px; border:1px solid var(--line);
-      border-radius:10px; background:#101014; margin-bottom:12px;
+      border-radius:10px; background:var(--field); margin-bottom:12px;
     }
     select {
       width:100%; font:inherit; color:var(--ink); padding:10px 12px; border:1px solid var(--line);
-      border-radius:10px; background:#101014; margin-bottom:8px; cursor:pointer;
+      border-radius:10px; background:var(--field); margin-bottom:8px; cursor:pointer;
     }
     input[type=file] { padding:7px 10px; font-size:13px; color:var(--muted); }
     input[type=file]::file-selector-button,
     input[type=file]::-webkit-file-upload-button {
       font:inherit; font-weight:600; font-size:13px; border:0; border-radius:8px;
-      padding:6px 13px; margin-right:11px; background:#2a2a33; color:#cfcfd6;
+      padding:6px 13px; margin-right:11px; background:var(--chip); color:#cfcfd6;
       cursor:pointer; transition:background .15s;
     }
     input[type=file]:hover::file-selector-button,
-    input[type=file]:hover::-webkit-file-upload-button { background:#34343d; }
+    input[type=file]:hover::-webkit-file-upload-button { background:var(--chip); }
     input[type=text]:focus, textarea:focus, select:focus { outline:none; border-color:var(--accent); }
-    input::placeholder, textarea::placeholder { color:#6a6a73; }
+    input::placeholder, textarea::placeholder { color:var(--text-soft); }
     button {
       display:inline-block; font:inherit; font-weight:600; border:0; cursor:pointer;
       background:var(--accent); color:#fff; padding:11px 18px; border-radius:11px;
       width:100%; transition:opacity .15s;
     }
     button:disabled { opacity:.5; cursor:default; }
-    button.secondary { background:#23232b; color:var(--accent); }
+    button.secondary { background:var(--border); color:var(--accent); }
     textarea {
       width:100%; font:inherit; color:var(--ink); padding:10px 12px; border:1px solid var(--line);
-      border-radius:10px; background:#101014; margin-bottom:12px;
+      border-radius:10px; background:var(--field); margin-bottom:12px;
       min-height:80px; resize:vertical; line-height:1.5;
     }
     .genstatus { font-size:13px; margin:10px 0 16px; }
@@ -80,7 +91,7 @@
     a.cancel { display:inline-block; font-size:12px; color:var(--muted); text-decoration:none; }
     a.cancel:hover { color:#ff453a; }
     .pbar-label { display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-bottom:6px; }
-    .pbar { height:8px; background:#26262e; border-radius:99px; overflow:hidden; }
+    .pbar { height:8px; background:var(--chip); border-radius:99px; overflow:hidden; }
     .pbar > span { display:block; height:100%; width:0%; background:var(--accent); border-radius:99px; transition:width .3s; }
     .pbar.indet > span { width:40%; animation:slide 1.1s ease-in-out infinite; }
     @keyframes slide { 0%{margin-left:-40%} 100%{margin-left:100%} }
@@ -92,7 +103,7 @@
     .badge.private { color:#32d74b; font-weight:700; }
     .err { color:#ff453a; font-weight:600; }
     .links a { color:var(--accent); text-decoration:none; }
-    .foot { text-align:center; color:#56565e; font-size:12px; margin-top:18px; }
+    .foot { text-align:center; color:var(--text-soft); font-size:12px; margin-top:18px; }
     .topbusy { position:fixed; top:10px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:9px; background:rgba(22,22,27,.96); border:1px solid var(--line); color:var(--ink); padding:8px 14px; border-radius:99px; font-size:13px; font-weight:600; z-index:50; box-shadow:0 6px 20px rgba(0,0,0,.45); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); max-width:calc(100% - 24px); }
     .topbusy.show { display:inline-flex; }
     .topbusy-spin { width:15px; height:15px; border-radius:50%; border:2px solid rgba(255,255,255,.22); border-top-color:var(--accent); animation:topbusyspin .7s linear infinite; flex:none; }
@@ -104,14 +115,14 @@
     .lightbox img { max-width:100%; max-height:100%; width:auto; height:auto; border-radius:10px; box-shadow:0 12px 40px rgba(0,0,0,.6); }
     .lightbox-x { position:fixed; top:12px; right:18px; color:#fff; font-size:30px; line-height:1; font-weight:300; opacity:.85; }
     .lblrow { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 6px; }
-    .ghostbtn { width:auto; flex:none; background:#1c1c22; color:var(--accent); border:1px solid var(--line); font-size:12px; font-weight:600; padding:5px 10px; border-radius:8px; cursor:pointer; }
+    .ghostbtn { width:auto; flex:none; background:var(--chip); color:var(--accent); border:1px solid var(--line); font-size:12px; font-weight:600; padding:5px 10px; border-radius:8px; cursor:pointer; }
     .ghostbtn:hover:not(:disabled) { border-color:var(--accent); }
     .ghostbtn:disabled { opacity:.5; cursor:default; }
     .titleview { font-size:14px; color:var(--ink); font-weight:600; line-height:1.35; word-break:break-word; flex:1; }
     .framespin { display:inline-flex; align-items:center; gap:9px; height:62px; padding:0 4px; color:var(--muted); font-size:13px; }
     .framespin .sp { width:18px; height:18px; flex:none; border-radius:50%; border:2px solid rgba(255,255,255,.22); border-top-color:var(--accent); animation:topbusyspin .7s linear infinite; }
     .tabs { display:flex; gap:8px; margin-bottom:16px; }
-    .tab { width:auto; flex:1; background:#26262e; color:var(--ink); font-weight:600; padding:10px 14px; border-radius:11px; }
+    .tab { width:auto; flex:1; background:var(--chip); color:var(--ink); font-weight:600; padding:10px 14px; border-radius:11px; }
     .tab.active { background:var(--accent); color:#fff; }
     .field { margin-bottom:14px; }
     .field label { margin-bottom:6px; }
@@ -120,27 +131,27 @@
     .framestrip img { height:62px; border-radius:8px; cursor:pointer; border:2px solid transparent; flex:none; }
     .framestrip img.sel { border-color:var(--accent); }
     .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
-    .chip { width:auto; background:#26262e; color:var(--ink); border:1px solid var(--line); padding:6px 11px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+    .chip { width:auto; background:var(--chip); color:var(--ink); border:1px solid var(--line); padding:6px 11px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
     .chip.blue { background:rgba(14,170,245,.16); color:#0eaaf5; border-color:#0eaaf5; }
     .posgrid { display:grid; grid-template-columns:repeat(3,40px); gap:6px; margin-bottom:18px; }
-    .posgrid button { width:40px; height:40px; background:#26262e; color:var(--muted); padding:0; border-radius:8px; font-size:16px; line-height:1; }
+    .posgrid button { width:40px; height:40px; background:var(--chip); color:var(--muted); padding:0; border-radius:8px; font-size:16px; line-height:1; }
     .posgrid button.sel { background:var(--accent); color:#fff; }
-    .segmented { display:flex; flex-wrap:wrap; gap:4px; background:#16161b; border:1px solid var(--line); border-radius:10px; padding:4px; margin-bottom:14px; }
+    .segmented { display:flex; flex-wrap:wrap; gap:4px; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:4px; margin-bottom:14px; }
     .segmented button { flex:1 1 70px; width:auto; background:transparent; color:var(--muted); padding:9px 0; border-radius:7px; font-size:13px; font-weight:600; }
     .segmented button.sel { background:var(--accent); color:#fff; }
-    .thumbsticky { position:sticky; top:0; z-index:5; background:#16161b; padding:6px 0 10px; box-shadow:0 8px 14px -8px rgba(0,0,0,.7); }
+    .thumbsticky { position:sticky; top:0; z-index:5; background:var(--surface); padding:6px 0 10px; box-shadow:0 8px 14px -8px rgba(0,0,0,.7); }
     #thumbCanvas { width:100%; height:auto; border-radius:12px; display:block; background:#000; touch-action:none; cursor:grab; }
     #thumbCanvas:active { cursor:grabbing; }
     .ctlval { color:var(--muted); font-weight:600; font-size:13px; }
     input[type=range] { width:100%; margin:2px 0 16px; accent-color:var(--accent); }
-    .swatches { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; }
+    .swatches { display:grid; grid-template-columns:repeat(6,30px); gap:10px; margin-bottom:18px; justify-content:start; }
     .swatches button { width:30px; height:30px; border-radius:50%; padding:0; border:2px solid transparent; cursor:pointer; }
-    .swatches button.sel { border-color:#fff; box-shadow:0 0 0 2px #0d0d10; }
+    .swatches button.sel { border-color:#fff; box-shadow:0 0 0 2px var(--bg); }
     .filerow { display:flex; gap:8px; align-items:stretch; margin-bottom:12px; }
     .filerow input[type=file] { margin-bottom:0; flex:1; min-width:0; }
     .filerow button { width:auto; flex:none; padding:0 20px; white-space:nowrap; }
     .dialgrid { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
-    .dial { display:flex; flex-direction:column; align-items:flex-start; flex:0 0 auto; gap:1px; background:#101014; border:1px solid var(--line); border-radius:10px; padding:7px 11px; cursor:ew-resize; touch-action:none; user-select:none; -webkit-user-select:none; }
+    .dial { display:flex; flex-direction:column; align-items:flex-start; flex:0 0 auto; gap:1px; background:var(--field); border:1px solid var(--line); border-radius:10px; padding:7px 11px; cursor:ew-resize; touch-action:none; user-select:none; -webkit-user-select:none; }
     .dial .dk { font-size:10.5px; color:var(--muted); font-weight:500; }
     .dial .dv { font-size:15px; color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
     .dial:active { border-color:var(--accent); background:var(--accent-soft); }
@@ -152,20 +163,40 @@
     .sec.collapsed .sechead { padding-bottom:0; color:var(--muted); }
     .sec.collapsed .chev { transform:rotate(-90deg); }
     .sec.collapsed .secbody { display:none; }
-    .enhancepanel { background:#101014; border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:14px; }
+    .enhancepanel { background:var(--field); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:14px; }
     .enhrow { display:grid; grid-template-columns:repeat(auto-fit, minmax(116px, 1fr)); gap:8px; margin-bottom:10px; }
-    .enhopt { width:auto; background:#1c1c22; color:var(--ink); font-size:13px; font-weight:600; padding:10px 8px; border:1px solid var(--line); border-radius:9px; }
+    .enhopt { width:auto; background:var(--chip); color:var(--ink); font-size:13px; font-weight:600; padding:10px 8px; border:1px solid var(--line); border-radius:9px; }
     .enhopt:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
     .enhancepanel input[type=text] { margin-bottom:0; }
-  </style>
+  
+    /* ---- Magic Premiere brand + theme/accent controls (ported from MSM) ---- */
+    .brand { display:flex; align-items:center; gap:9px; font-family:"Poppins","Segoe UI",-apple-system,sans-serif; font-weight:700; font-size:21px; letter-spacing:-.01em; }
+    .brand .star { font-size:18px; color:var(--title-g2, var(--accent)); }
+    .brand .wm { background:linear-gradient(92deg, var(--title-g1,#5fa0ff), var(--title-g2,#2f80ff) 55%, var(--title-g3,#4fc3f7)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+    .hbtns { display:flex; align-items:center; gap:7px; }
+    .theme-toggle { width:auto; flex:none; font-size:15px; line-height:1; padding:7px 10px; border-radius:9px; border:1px solid var(--border); background:transparent; color:var(--text); cursor:pointer; transition:background .15s; }
+    .theme-toggle:hover { background:var(--chip); }
+    .accent-pop { display:flex; flex-wrap:wrap; gap:9px; width:max-content; max-width:200px; margin:-10px 0 16px auto; padding:12px; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 10px 28px rgba(0,0,0,.32); }
+    .accent-pop[hidden] { display:none; }
+    .acc-sw { width:26px; height:26px; flex:none; border-radius:50%; padding:0; border:2px solid transparent; cursor:pointer; }
+    .acc-sw.sel { border-color:var(--text); box-shadow:0 0 0 2px var(--surface); }
+    #msmProject, #msmProject option { text-align:center; }
+    #msmProject { text-align-last:center; }
+</style>
 </head>
 <body>
+  <script>try{if(localStorage.getItem("mp_theme")!=="light")document.body.classList.add("dark");}catch(e){}</script>
   <div class="wrap">
     <div id="topBusy" class="topbusy" aria-live="polite"><span class="topbusy-spin"></span><span id="topBusyLabel">Working…</span><span id="topBusyPct" class="topbusy-pct"></span></div>
     <div class="hrow">
-      <h1>YouTube Uploader</h1>
-      <button id="helpBtn" class="help" type="button" aria-label="How it works">?</button>
+      <div class="brand"><span class="star">✦</span><span class="wm">Magic Premiere</span></div>
+      <div class="hbtns">
+        <button id="helpBtn" class="theme-toggle" type="button" title="How it works" aria-label="How it works">?</button>
+        <button id="accentBtn" class="theme-toggle" type="button" title="Accent color" aria-label="Accent color">🎨</button>
+        <button id="themeToggle" class="theme-toggle" type="button" title="Light / dark" aria-label="Toggle theme">🌙</button>
+      </div>
     </div>
+    <div id="accentPop" class="accent-pop" hidden></div>
     <div id="helpPanel" class="helppanel" style="display:none">
       Upload a finished film — it goes straight to cloud storage, then transfers to YouTube as a <b>private</b> draft. If the film has dialogue, it auto-transcribes and writes the title, description &amp; chapters for you to review (or add your own transcript to skip that). Large files upload in chunks automatically. Last step: make a thumbnail.
     </div>
@@ -334,7 +365,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">v0.33 — step 3</div>
+    <div class="foot">Magic Premiere · v0.34</div>
   </div>
 
   <script>
@@ -1874,6 +1905,57 @@
       }).catch(function (e) { thumbStatus.innerHTML = '<span style="color:#ff9f0a">' + e.message + '</span>'; })
         .then(function () { busyDone(); moreFramesBtn.disabled = false; });
     });
+
+    // ---- Theme + accent palette (ported from MSM, persisted in localStorage) ----
+    (function () {
+      var ACCENTS = [
+        { a:"#2f80ff", g:["#5fa0ff","#2f80ff","#4fc3f7"] },
+        { a:"#7c4dff", g:["#9a78ff","#7c4dff","#c77dff"] },
+        { a:"#0e9494", g:["#2bc4b4","#0e9494","#5fd6a0"] },
+        { a:"#11a050", g:["#3cc66e","#11a050","#a3d977"] },
+        { a:"#ec5e12", g:["#ff8a3d","#ec5e12","#ffb74d"] },
+        { a:"#ff2d78", g:["#ff6098","#ff2d78","#ff8fb3"] },
+        { a:"#2b2b30", g:["#e8e8ee","#b8b8c2","#8a8a96"] },
+        { a:"#f0f0f5", g:["#4a4a52","#2b2b30","#6a6a72"] }
+      ];
+      function gv(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+      function sv(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+      function gradFor(a){ for (var i=0;i<ACCENTS.length;i++) if (ACCENTS[i].a===a) return ACCENTS[i].g; return ["#5fa0ff","#2f80ff","#4fc3f7"]; }
+      function relLum(hex){ hex=(hex||"").replace("#",""); if(hex.length===3)hex=hex.split("").map(function(c){return c+c;}).join(""); var r=parseInt(hex.slice(0,2),16)/255,g=parseInt(hex.slice(2,4),16)/255,bl=parseInt(hex.slice(4,6),16)/255; function f(c){return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4);} return 0.2126*f(r)+0.7152*f(g)+0.0722*f(bl); }
+      function rgba(hex,al){ hex=hex.replace("#",""); if(hex.length===3)hex=hex.split("").map(function(c){return c+c;}).join(""); var n=parseInt(hex,16); return "rgba("+((n>>16)&255)+","+((n>>8)&255)+","+(n&255)+","+al+")"; }
+      var accent = gv("mp_accent") || "#2f80ff";
+      function accentText(){ var L=relLum(accent), dark=document.body.classList.contains("dark"); if(L<0.16)return "#fff"; if(L>0.70)return "#1a1a18"; return dark?"#fff":"#1a1a18"; }
+      function applyAccent(a){
+        accent=a; var g=gradFor(a), st=document.body.style;
+        st.setProperty("--accent",a);
+        st.setProperty("--accent-soft",rgba(a,0.18));
+        st.setProperty("--title-g1",g[0]); st.setProperty("--title-g2",g[1]); st.setProperty("--title-g3",g[2]);
+        st.setProperty("--accent-text",accentText());
+        sv("mp_accent",a);
+        var pop=document.getElementById("accentPop");
+        if(pop) pop.querySelectorAll(".acc-sw").forEach(function(x){ x.classList.toggle("sel", x.getAttribute("data-a")===a); });
+      }
+      var themeToggle=document.getElementById("themeToggle");
+      function applyTheme(dark){
+        document.body.classList.toggle("dark",dark);
+        sv("mp_theme", dark?"dark":"light");
+        if(themeToggle) themeToggle.textContent = dark ? "☀️" : "🌙";
+        var meta=document.querySelector('meta[name=theme-color]'); if(meta) meta.setAttribute("content", dark?"#1a1a1c":"#faf9f5");
+        document.body.style.setProperty("--accent-text", accentText());
+      }
+      applyTheme(gv("mp_theme")!=="light");
+      (function(){
+        var pop=document.getElementById("accentPop"); if(!pop) return;
+        var html=""; ACCENTS.forEach(function(c){ html+='<button class="acc-sw" data-a="'+c.a+'" style="background:'+c.a+'"></button>'; });
+        pop.innerHTML=html;
+        pop.querySelectorAll(".acc-sw").forEach(function(x){ x.addEventListener("click",function(e){ e.stopPropagation(); applyAccent(x.getAttribute("data-a")); pop.hidden=true; }); });
+      })();
+      applyAccent(accent);
+      var accentBtn=document.getElementById("accentBtn");
+      if(accentBtn) accentBtn.addEventListener("click",function(e){ e.stopPropagation(); var pop=document.getElementById("accentPop"); if(pop) pop.hidden=!pop.hidden; });
+      if(themeToggle) themeToggle.addEventListener("click",function(){ applyTheme(!document.body.classList.contains("dark")); });
+      document.addEventListener("click",function(){ var pop=document.getElementById("accentPop"); if(pop&&!pop.hidden) pop.hidden=true; });
+    })();
 
     refreshStatus();
   </script>
