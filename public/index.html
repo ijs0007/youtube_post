@@ -93,6 +93,12 @@
     .err { color:#ff453a; font-weight:600; }
     .links a { color:var(--accent); text-decoration:none; }
     .foot { text-align:center; color:#56565e; font-size:12px; margin-top:18px; }
+    .topbusy { position:fixed; top:10px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:9px; background:rgba(22,22,27,.96); border:1px solid var(--line); color:var(--ink); padding:8px 14px; border-radius:99px; font-size:13px; font-weight:600; z-index:50; box-shadow:0 6px 20px rgba(0,0,0,.45); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); max-width:calc(100% - 24px); }
+    .topbusy.show { display:inline-flex; }
+    .topbusy-spin { width:15px; height:15px; border-radius:50%; border:2px solid rgba(255,255,255,.22); border-top-color:var(--accent); animation:topbusyspin .7s linear infinite; flex:none; }
+    @keyframes topbusyspin { to { transform:rotate(360deg); } }
+    .topbusy #topBusyLabel { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .topbusy-pct { color:var(--accent); font-variant-numeric:tabular-nums; }
     .tabs { display:flex; gap:8px; margin-bottom:16px; }
     .tab { width:auto; flex:1; background:#26262e; color:var(--ink); font-weight:600; padding:10px 14px; border-radius:11px; }
     .tab.active { background:var(--accent); color:#fff; }
@@ -144,6 +150,7 @@
 </head>
 <body>
   <div class="wrap">
+    <div id="topBusy" class="topbusy" aria-live="polite"><span class="topbusy-spin"></span><span id="topBusyLabel">Working…</span><span id="topBusyPct" class="topbusy-pct"></span></div>
     <div class="hrow">
       <h1>YouTube Uploader</h1>
       <button id="helpBtn" class="help" type="button" aria-label="How it works">?</button>
@@ -310,7 +317,7 @@
       </div>
     </div>
 
-    <div class="foot">v0.26 — step 3</div>
+    <div class="foot">v0.27 — step 3</div>
   </div>
 
   <script>
@@ -392,6 +399,19 @@
         drawThumb();
       });
     }
+
+    // ---- Top status pill: an always-visible spinner for long jobs, since the
+    // detailed progress bars sit lower in the card and can fall below the fold.
+    var topBusy = document.getElementById('topBusy');
+    var topBusyLabel = document.getElementById('topBusyLabel');
+    var topBusyPct = document.getElementById('topBusyPct');
+    function busy(label, pct) {
+      if (!topBusy) return;
+      if (label != null) topBusyLabel.textContent = label;
+      topBusyPct.textContent = (pct == null || pct === '') ? '' : (pct + '%');
+      topBusy.classList.add('show');
+    }
+    function busyDone() { if (topBusy) topBusy.classList.remove('show'); }
 
     async function refreshStatus() {
       ready = false;
@@ -507,6 +527,7 @@
             const pct = Math.round((e.loaded / e.total) * 100);
             p1bar.style.width = pct + '%';
             p1pct.textContent = pct + '%';
+            busy('Uploading to R2', pct);
           }
         };
         xhr.onload = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error('R2 upload failed (HTTP ' + xhr.status + ')'));
@@ -528,6 +549,7 @@
       prog1.classList.add('show');
       p1label.textContent = 'Uploading to R2';
       p1bar.style.width = '0%'; p1pct.textContent = '0%';
+      busy('Uploading to R2', 0);
       const pres = await (await fetch('/api/presign', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: file.name, contentType, size: file.size })
@@ -557,6 +579,7 @@
       p1bar.style.width = pct + '%';
       p1pct.textContent = pct + '%';
       p1label.textContent = 'Uploading to R2 · ' + state.completed.size + '/' + state.partCount + ' parts';
+      busy('Uploading to R2', pct);
     }
 
     // PUT one part's bytes to its presigned URL; resolve with the part's ETag.
@@ -648,6 +671,7 @@
         '). Your connection may have dropped. The finished parts are safe.';
       resumeBox.classList.add('show');
       if (typeof showStatus === 'function') showStatus();
+      busyDone();
     }
 
     async function abortMultipart(state) {
@@ -665,6 +689,7 @@
       resumeBox.classList.remove('show');
       p1label.textContent = 'Starting chunked upload';
       p1bar.style.width = '0%'; p1pct.textContent = '0%';
+      busy('Starting upload', 0);
 
       const create = await (await fetch('/api/multipart/create', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -688,7 +713,7 @@
         // paused: surface a Resume button and wait for the user.
         showPaused(state);
         await new Promise((resolve) => {
-          resumeBtn.onclick = () => { resumeBox.classList.remove('show'); p1label.textContent = 'Resuming upload'; resolve(); };
+          resumeBtn.onclick = () => { resumeBox.classList.remove('show'); p1label.textContent = 'Resuming upload'; busy('Resuming upload', null); resolve(); };
           cancelLink.onclick = (ev) => { ev.preventDefault(); state.canceled = true; resumeBox.classList.remove('show'); resolve(); };
         });
         if (state.canceled) { await abortMultipart(state); throw new Error('Upload canceled.'); }
@@ -696,6 +721,7 @@
 
       // All parts in — ask R2 to stitch them into the final object.
       p1label.textContent = 'Finishing upload';
+      busy('Finishing upload', null);
       const parts = [...state.completed.entries()]
         .sort((a, b) => a[0] - b[0])
         .map(([PartNumber, ETag]) => ({ PartNumber, ETag }));
@@ -721,6 +747,7 @@
               label = 'Transcribing part ' + (job.chunkIndex || 1) + ' of ' + job.chunkTotal;
             }
             pTlabel.textContent = label;
+            busy(label, null);
             if (job.state === 'done' || job.state === 'error') return resolve(job);
           } catch (e) { /* keep polling */ }
           setTimeout(tick, 1500);
@@ -732,6 +759,7 @@
     // R2 object -> Whisper -> metadata; fills the fields, then pauses for review
     async function runTranscribeFlow(key) {
       progT.classList.add('show'); pTbar.style.width = ''; pTwrap.classList.add('indet'); pTlabel.textContent = 'Fetching video from R2';
+      busy('Transcribing…', null);
       const tr = await (await fetch('/api/transcribe', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key })
@@ -741,6 +769,7 @@
       if (job.state === 'error') throw new Error('Transcription failed: ' + (job.error || 'unknown'));
 
       pTlabel.textContent = 'Writing title & description';
+      busy('Writing title & description', null);
       const md = await generateMetadata(job.transcript || '', loglineInput.value || '');
       if (md.error) throw new Error(md.error + (md.raw ? ' [AI replied: ' + String(md.raw).slice(0, 140) + '…]' : ''));
       titleInput.value = md.title || '';
@@ -764,10 +793,12 @@
               p2bar.style.width = pct + '%';
               p2pct.textContent = pct + '%';
               p2label.textContent = 'Sending to YouTube';
+              busy('Sending to YouTube', pct);
             } else if (job.state === 'fetching' || job.state === 'starting' || job.state === 'uploading') {
               p2wrap.classList.add('indet');
               p2label.textContent = job.state === 'uploading' ? 'Sending to YouTube' : 'Preparing transfer';
               p2pct.textContent = '';
+              busy(job.state === 'uploading' ? 'Sending to YouTube' : 'Preparing transfer', null);
             }
             if (job.state === 'done' || job.state === 'error') return resolve(job);
           } catch (e) { /* keep polling */ }
@@ -781,6 +812,7 @@
     async function startTransfer(key) {
       prog2.classList.add('show'); p2wrap.classList.add('indet');
       p2bar.style.width = ''; p2pct.textContent = '';
+      busy('Preparing transfer', null);
       const tr = await (await fetch('/api/transfer', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, title: titleInput.value || '', description: descInput.value || '' })
@@ -788,6 +820,7 @@
       if (!tr.jobId) throw new Error(tr.error || 'Could not start transfer');
       const job = await pollTransfer(tr.jobId);
       p2wrap.classList.remove('indet');
+      busyDone();
       result.classList.add('show');
       if (job.state === 'error') {
         resultBody.innerHTML = '<p class="err">Transfer failed: ' + (job.error || 'unknown') + '</p>';
@@ -843,6 +876,7 @@
         setCollapsed('secDetails', true); // video's in — fold the inputs away
         if (useWhisper) {
           await runTranscribeFlow(key);
+          busyDone();
           // Pause for review: hide Upload, reveal Send to YouTube.
           pendingKey = key;
           uploadBtn.style.display = 'none';
@@ -856,6 +890,7 @@
       } catch (e) {
         result.classList.add('show');
         resultBody.innerHTML = '<p class="err">' + e.message + '</p>';
+        busyDone();
         resumeBox.classList.remove('show');
         setCollapsed('secDetails', false); // re-open so they can fix/retry
         uploadBtn.style.display = 'block';
@@ -874,6 +909,7 @@
       } catch (e) {
         result.classList.add('show');
         resultBody.innerHTML = '<p class="err">' + e.message + '</p>';
+        busyDone();
         sendBtn.disabled = false; // allow retry
       }
     });
@@ -1456,6 +1492,7 @@
       if (needImg && !img64) { es.innerHTML = '<span class="err">Pick a frame first.</span>'; return; }
       es.innerHTML = '<span style="color:var(--muted)">Enhancing… this can take 15–45 seconds.</span>';
       setEnhBusy(true);
+      busy('Enhancing…', null);
       fetch('/api/thumb/enhance', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1478,7 +1515,7 @@
           es.innerHTML = '<span class="err">No image came back — try again.</span>';
         }
       }).catch(function (e) { es.innerHTML = '<span class="err">' + e.message + '</span>'; })
-        .then(function () { setEnhBusy(false); });
+        .then(function () { setEnhBusy(false); busyDone(); });
     }
     Array.prototype.forEach.call(document.querySelectorAll('.enhopt'), function (b) {
       b.addEventListener('click', function () { runEnhance(b.getAttribute('data-mode')); });
