@@ -103,6 +103,11 @@
     .lightbox.show { display:flex; }
     .lightbox img { max-width:100%; max-height:100%; width:auto; height:auto; border-radius:10px; box-shadow:0 12px 40px rgba(0,0,0,.6); }
     .lightbox-x { position:fixed; top:12px; right:18px; color:#fff; font-size:30px; line-height:1; font-weight:300; opacity:.85; }
+    .lblrow { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 6px; }
+    .ghostbtn { width:auto; flex:none; background:#1c1c22; color:var(--accent); border:1px solid var(--line); font-size:12px; font-weight:600; padding:5px 10px; border-radius:8px; cursor:pointer; }
+    .ghostbtn:hover:not(:disabled) { border-color:var(--accent); }
+    .ghostbtn:disabled { opacity:.5; cursor:default; }
+    .titleview { font-size:14px; color:var(--ink); font-weight:600; line-height:1.35; word-break:break-word; flex:1; }
     .tabs { display:flex; gap:8px; margin-bottom:16px; }
     .tab { width:auto; flex:1; background:#26262e; color:var(--ink); font-weight:600; padding:10px 14px; border-radius:11px; }
     .tab.active { background:var(--accent); color:#fff; }
@@ -260,6 +265,7 @@
 
       <label>Frame from your film</label>
       <div id="frameStrip" class="framestrip"></div>
+      <button id="moreFramesBtn" class="secondary" type="button" style="margin:0 0 12px">↻ More frame choices</button>
       <input type="file" id="frameUpload" accept="image/*">
       <p class="hint" style="margin:-8px 0 14px">Pick an auto-grabbed frame, or upload your own still. <b>Drag the image to reposition it.</b></p>
 
@@ -287,7 +293,10 @@
       <p class="dialhint">Drag a dial sideways to adjust &middot; double-tap to reset it.</p>
       <button id="resetGradeBtn" class="secondary" style="margin:0 0 16px">Reset image</button>
 
-      <label for="overlayText">Overlay text — one line per row</label>
+      <label>Video title</label>
+      <div class="lblrow"><span id="thumbTitleView" class="titleview">—</span><button id="newTitleBtn" class="ghostbtn" type="button">↻ New</button></div>
+
+      <div class="lblrow"><label for="overlayText" style="margin:0">On-screen text — one line per row</label><button id="newTextBtn" class="ghostbtn" type="button">↻ New</button></div>
       <textarea id="overlayText" style="min-height:84px" placeholder="The punchy text on the thumbnail"></textarea>
 
       <label>Tap a word to highlight it</label>
@@ -323,7 +332,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">v0.30 — step 3</div>
+    <div class="foot">v0.31 — step 3</div>
   </div>
 
   <script>
@@ -380,6 +389,7 @@
     let selectedCastText = '';    // formatted cast block from the chosen MSM project
     let selectedCrewText = '';    // formatted crew block
     let overlayLines = [];        // [[{t,b}],...] source of truth for the text
+    let frameRound = 0;           // extraction round for “more frame choices”
     let thumbFrameImg = null;     // current background Image
     let thumbPos = 'bl';          // text anchor: [t/m/b][l/c/r]
     let thumbStyle = 'cinematic'; // 'cinematic' (scrim + big bottom text) | 'blocks'
@@ -1448,6 +1458,7 @@
 
     async function startThumbFlow() {
       thumbCard.style.display = 'block';
+      frameRound = 0; setThumbTitleView();
       thumbCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
       thumbStatus.innerHTML = '<span style="color:var(--muted)">Pulling frames from your film and writing the overlay…</span>';
       setThumbBtn.disabled = true;
@@ -1784,6 +1795,75 @@
         }).catch(function (e) { status.innerHTML = '<span class="err">' + e.message + '</span>'; });
       });
     })();
+
+    // ---- Regenerate cluster: new title / new on-screen text / more frames ----
+    function setThumbTitleView() {
+      var v = document.getElementById('thumbTitleView');
+      if (v) v.textContent = (titleInput.value || '').trim() || '\u2014';
+    }
+    function setFrameStrip(frames) {
+      var strip = document.getElementById('frameStrip');
+      strip.innerHTML = '';
+      frames.forEach(function (src, i) {
+        var im = document.createElement('img');
+        im.src = src;
+        im.addEventListener('click', function () { applyFrame(src, im); });
+        strip.appendChild(im);
+        if (i === 0) applyFrame(src, im);
+      });
+    }
+    function titleSeed() {
+      var seed = (lastSynopsis || lastRawTitle || titleInput.value || '').trim();
+      if (!seed) {
+        var fn = (fileInput.files[0] && fileInput.files[0].name) || '';
+        var dot = fn.lastIndexOf('.'); if (dot > 0) fn = fn.slice(0, dot);
+        seed = fn.split('_').join(' ').split('-').join(' ').trim();
+      }
+      return seed;
+    }
+    var nTitleBtn = document.getElementById('newTitleBtn');
+    if (nTitleBtn) nTitleBtn.addEventListener('click', function () {
+      var seed = titleSeed();
+      if (!seed) { thumbStatus.innerHTML = '<span style="color:#ff9f0a">Nothing to base a title on yet.</span>'; return; }
+      nTitleBtn.disabled = true; busy('Writing new title\u2026', null);
+      generateMetadata('', seed).then(function (md) {
+        if (md && md.title) { titleInput.value = md.title; lastRawTitle = md.rawTitle || lastRawTitle; setThumbTitleView(); }
+      }).catch(function () { }).then(function () { busyDone(); nTitleBtn.disabled = false; });
+    });
+    var nTextBtn = document.getElementById('newTextBtn');
+    if (nTextBtn) nTextBtn.addEventListener('click', function () {
+      nTextBtn.disabled = true; busy('Writing new text\u2026', null);
+      fetch('/api/thumb/text', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: lastRawTitle || titleInput.value || '', synopsis: lastSynopsis || descInput.value || '' })
+      }).then(function (r) { return r.json(); }).then(function (res) {
+        if (res && res.lines && res.lines.length) {
+          overlayLines = res.lines.map(function (line) { return line.map(function (w) { return { t: String(w.t || ''), b: !!w.b }; }); });
+        } else { overlayLines = fallbackOverlay(); }
+        document.getElementById('overlayText').value = overlayLinesToText(overlayLines);
+        renderChips(); drawThumb();
+      }).catch(function () { }).then(function () { busyDone(); nTextBtn.disabled = false; });
+    });
+    var moreFramesBtn = document.getElementById('moreFramesBtn');
+    if (moreFramesBtn) moreFramesBtn.addEventListener('click', function () {
+      if (!lastUploadKey) { thumbStatus.innerHTML = '<span style="color:#ff9f0a">No film loaded to pull frames from.</span>'; return; }
+      moreFramesBtn.disabled = true; busy('Pulling new frames\u2026', null);
+      frameRound++;
+      fetch('/api/thumb/frames', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: lastUploadKey, round: frameRound })
+      }).then(function (r) { return r.json(); }).then(function (start) {
+        if (!start.jobId) throw new Error(start.error || 'Could not start frame grab');
+        return pollFrames(start.jobId);
+      }).then(function (job) {
+        if (job.state === 'error' || !job.frames || !job.frames.length) {
+          thumbStatus.innerHTML = '<span style="color:#ff9f0a">Couldn\'t grab more frames (' + (job.error || 'none') + ').</span>'; return;
+        }
+        setFrameStrip(job.frames);
+        thumbStatus.innerHTML = '<span style="color:#34c759">New frames in \u2014 pick one.</span>';
+      }).catch(function (e) { thumbStatus.innerHTML = '<span style="color:#ff9f0a">' + e.message + '</span>'; })
+        .then(function () { busyDone(); moreFramesBtn.disabled = false; });
+    });
 
     refreshStatus();
   </script>

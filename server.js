@@ -42,7 +42,7 @@ import pg from "pg";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_VERSION = "0.26";
+const APP_VERSION = "0.31";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -651,7 +651,7 @@ function ffmpegProbeDuration(file) {
 // Background: pull the master from R2, then grab evenly-spaced candidate frames
 // (each cropped to fill 1280x720) as base64 JPEGs for the thumbnail picker. One bad
 // timestamp is skipped rather than failing the whole job.
-async function runFrameExtraction(jobId, key) {
+async function runFrameExtraction(jobId, key, round) {
   const job = thumbJobs.get(jobId);
   const tmpVideo = path.join(os.tmpdir(), `yt-thumbvid-${jobId}`);
   const framePaths = [];
@@ -666,7 +666,11 @@ async function runFrameExtraction(jobId, key) {
     // 15 candidate frames evenly spread across the film (skipping the very
     // start/end). More choices to pick the best thumbnail moment from.
     const FRAME_COUNT = 15;
-    const pcts = Array.from({ length: FRAME_COUNT }, (_, i) => 0.05 + (0.93 - 0.05) * (i / (FRAME_COUNT - 1)));
+    // Each "round" interleaves new sample points between the previous ones, so
+    // "more frame choices" returns genuinely different stills (round 0 = base).
+    const gap = (0.93 - 0.05) / (FRAME_COUNT - 1);
+    const phase = ((Number(round) || 0) % 4) * (gap / 4);
+    const pcts = Array.from({ length: FRAME_COUNT }, (_, i) => Math.min(0.97, Math.max(0.03, 0.05 + gap * i + phase)));
     let idx = 0;
     for (const p of pcts) {
       const t = dur > 0 ? dur * p : (idx * 1.2 + 0.4); // fallback: early offsets
@@ -1142,11 +1146,11 @@ app.get("/api/msm/credits", async (req, res) => {
 app.post("/api/thumb/frames", (req, res) => {
   if (!r2Configured) return res.status(500).json({ error: "R2 not configured." });
   if (!ffmpegStatic) return res.status(500).json({ error: "ffmpeg not available." });
-  const { key } = req.body || {};
+  const { key, round } = req.body || {};
   if (!key) return res.status(400).json({ error: "Missing key." });
   const jobId = crypto.randomUUID();
   thumbJobs.set(jobId, { state: "fetching", createdAt: Date.now() });
-  runFrameExtraction(jobId, key);
+  runFrameExtraction(jobId, key, round);
   res.json({ jobId });
 });
 
