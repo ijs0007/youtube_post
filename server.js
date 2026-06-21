@@ -42,7 +42,7 @@ import pg from "pg";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_VERSION = "0.22";
+const APP_VERSION = "0.23";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -942,7 +942,7 @@ app.post("/api/metadata", async (req, res) => {
     "",
     "Rules:",
     "- title: a CATCHY, attention-grabbing title in the style of viral YouTube short films — a punchy, present-tense hook that captures the central conflict, the surprising turn, or the emotional stakes and makes someone want to click. Under 90 characters, Title Case, no emoji. It must stay TRUE to the film: create intrigue, never deceive, and never reveal the ending. Match the dramatic, curiosity-driven style of this channel's real titles, e.g. \"Boss Lady Shocks Co-worker With Unexpected Act of Kindness\", \"Woman Vows To Never Forgive Her Sister Again\", \"Man Blames Himself For Wife's Death, Contemplates Suicide\". Do NOT add the channel name or any '| ...' suffix — that is added separately.",
-    "- synopsis: 1-3 short paragraphs describing the film in an engaging, spoiler-light way (set premise and tone; do not reveal the ending). Plain paragraphs only — no chapter timestamps, no section headers, no calls to subscribe.",
+    "- synopsis: just 1-2 short, punchy sentences. Hook the viewer with the premise, tone, or central question — make them want to click — without giving away the plot or the ending. No chapter timestamps, no calls to subscribe. Short and sweet.",
     '- chapters: ONLY if the transcript includes timestamps, a newline-separated list of chapter markers, one per line, in the format "M:SS Label" (use "H:MM:SS Label" for films over an hour). The FIRST line MUST start at "0:00". Provide at least 3 chapters, each at least 10 seconds after the previous one, anchored to real shifts in the transcript (scene/beat changes). If the transcript has NO timestamps, return an empty string "" — do not invent chapters.',
     "- If the transcript is empty or nearly silent (little/no dialogue), base the synopsis on the logline. If there is ALSO no logline, infer a short, plausible title and synopsis from the filename; if even that gives nothing, use a simple generic title and a one-line placeholder synopsis. Keep it modest — don't invent specific plot or dialogue the inputs don't support — but ALWAYS fill the fields.",
     "- CRITICAL: Always call the emit_metadata tool, and always fill all three fields. Even when inputs are thin, provide a best-effort title and synopsis (inferred from the filename, or a simple placeholder) rather than refusing. chapters may be an empty string when there are no timestamps.",
@@ -978,7 +978,7 @@ app.post("/api/metadata", async (req, res) => {
             type: "object",
             properties: {
               title: { type: "string", description: "Catchy title, under 90 chars, Title Case, no emoji, no channel suffix." },
-              synopsis: { type: "string", description: "1-3 short, spoiler-light paragraphs." },
+              synopsis: { type: "string", description: "1-2 short, punchy, spoiler-light sentences that hook the viewer." },
               chapters: { type: "string", description: "Newline-separated 'M:SS Label' lines if the transcript has timestamps; otherwise an empty string." },
             },
             required: ["title", "synopsis", "chapters"],

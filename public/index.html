@@ -6,50 +6,51 @@
   <meta name="theme-color" content="#0d0d10">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <title>YouTube Uploader</title>
   <style>
-    :root { --accent:#7c4dff; --ink:#f0f0f3; --muted:#9a9aa4; --line:#2c2c34; color-scheme:dark; }
+    :root { --accent:#2f80ff; --accent-soft:rgba(47,128,255,.14); --ink:#f0f0f3; --muted:#9a9aa4; --line:#2a2a33; color-scheme:dark; }
     * { box-sizing:border-box; }
     body {
-      font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-      color:var(--ink); background:#0d0d10; margin:0; padding:32px 18px;
+      font:15px/1.5 "Poppins",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      color:var(--ink); background:#0d0d10; margin:0; padding:24px 16px;
       -webkit-font-smoothing:antialiased;
     }
-    .wrap { max-width:560px; margin:0 auto; }
-    h1 { font-size:26px; font-weight:700; letter-spacing:-.02em; margin:0 0 4px; }
-    .sub { color:var(--muted); margin:0 0 24px; font-size:15px; }
+    .wrap { max-width:540px; margin:0 auto; }
+    h1 { font-size:23px; font-weight:700; letter-spacing:-.02em; margin:0 0 3px; }
+    .sub { color:var(--muted); margin:0 0 20px; font-size:14px; }
     .card {
-      background:#16161b; border:1px solid #23232b; border-radius:18px; padding:22px; margin-bottom:16px;
+      background:#15151a; border:1px solid #222229; border-radius:16px; padding:18px; margin-bottom:14px;
       box-shadow:0 1px 3px rgba(0,0,0,.4);
     }
     .status { display:flex; align-items:center; gap:9px; font-size:14px; }
     .dot { width:9px; height:9px; border-radius:50%; background:#3a3a42; flex:none; }
     .dot.ok { background:#32d74b; }
     .dot.warn { background:#ff9f0a; }
-    label { display:block; font-size:13px; font-weight:600; color:var(--muted); margin:0 0 6px; }
+    label { display:block; font-size:12.5px; font-weight:600; color:var(--muted); margin:0 0 5px; }
     .gradelbl { font-weight:500; font-size:12px; margin:6px 0 4px; opacity:.9; }
     input[type=text], input[type=file] {
-      width:100%; font:inherit; color:var(--ink); padding:11px 12px; border:1px solid var(--line);
-      border-radius:11px; background:#101014; margin-bottom:16px;
+      width:100%; font:inherit; color:var(--ink); padding:10px 12px; border:1px solid var(--line);
+      border-radius:10px; background:#101014; margin-bottom:12px;
     }
     select {
-      width:100%; font:inherit; color:var(--ink); padding:11px 12px; border:1px solid var(--line);
-      border-radius:11px; background:#101014; margin-bottom:8px; cursor:pointer;
+      width:100%; font:inherit; color:var(--ink); padding:10px 12px; border:1px solid var(--line);
+      border-radius:10px; background:#101014; margin-bottom:8px; cursor:pointer;
     }
-    input[type=file] { padding:9px 12px; }
+    input[type=file] { padding:8px 12px; }
+    input[type=text]:focus, textarea:focus, select:focus { outline:none; border-color:var(--accent); }
     input::placeholder, textarea::placeholder { color:#6a6a73; }
     button {
       display:inline-block; font:inherit; font-weight:600; border:0; cursor:pointer;
-      background:var(--accent); color:#fff; padding:12px 18px; border-radius:12px;
+      background:var(--accent); color:#fff; padding:11px 18px; border-radius:11px;
       width:100%; transition:opacity .15s;
     }
     button:disabled { opacity:.5; cursor:default; }
-    button.secondary { background:#26262e; color:var(--accent); }
+    button.secondary { background:#23232b; color:var(--accent); }
     textarea {
-      width:100%; font:inherit; color:var(--ink); padding:11px 12px; border:1px solid var(--line);
-      border-radius:11px; background:#101014; margin-bottom:16px;
-      min-height:130px; resize:vertical; line-height:1.5;
+      width:100%; font:inherit; color:var(--ink); padding:10px 12px; border:1px solid var(--line);
+      border-radius:10px; background:#101014; margin-bottom:12px;
+      min-height:80px; resize:vertical; line-height:1.5;
     }
     .genstatus { font-size:13px; margin:10px 0 16px; }
     .checkrow { display:flex; align-items:flex-start; gap:9px; font-size:13px; color:var(--ink); font-weight:400; line-height:1.45; margin:0 0 16px; cursor:pointer; }
@@ -103,7 +104,16 @@
     input[type=range] { width:100%; margin:2px 0 16px; accent-color:var(--accent); }
     .swatches { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; }
     .swatches button { width:30px; height:30px; border-radius:50%; padding:0; border:2px solid transparent; cursor:pointer; }
-    .swatches button.sel { border-color:#fff; box-shadow:0 0 0 2px var(--bg); }
+    .swatches button.sel { border-color:#fff; box-shadow:0 0 0 2px #0d0d10; }
+    .filerow { display:flex; gap:8px; align-items:stretch; margin-bottom:12px; }
+    .filerow input[type=file] { margin-bottom:0; flex:1; min-width:0; }
+    .filerow button { width:auto; flex:none; padding:0 20px; white-space:nowrap; }
+    .dialgrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(96px, 1fr)); gap:8px; margin-bottom:10px; }
+    .dial { display:flex; flex-direction:column; align-items:flex-start; gap:1px; background:#101014; border:1px solid var(--line); border-radius:10px; padding:7px 11px; cursor:ew-resize; touch-action:none; user-select:none; -webkit-user-select:none; }
+    .dial .dk { font-size:10.5px; color:var(--muted); font-weight:500; }
+    .dial .dv { font-size:15px; color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+    .dial:active { border-color:var(--accent); background:var(--accent-soft); }
+    .dialhint { font-size:11.5px; color:var(--muted); margin:-2px 0 14px; opacity:.85; }
   </style>
 </head>
 <body>
@@ -116,7 +126,7 @@
       <button class="tab" id="tabTemplate">Template</button>
     </div>
 
-    <div class="card">
+    <div class="card" id="statusCard">
       <div class="status"><span id="dot" class="dot"></span><span id="statusText">Checking status…</span></div>
       <div id="authBlock" style="margin-top:16px; display:none;">
         <a class="btn" href="/auth">Authorize with YouTube</a>
@@ -126,17 +136,14 @@
 
     <div id="uploadView">
     <div class="card">
-      <label for="video">Video file — large files OK (uploads in chunks)</label>
-      <input type="file" id="video" accept="video/*">
+      <label for="video">Video file</label>
+      <div class="filerow">
+        <input type="file" id="video" accept="video/*">
+        <button id="uploadBtn" disabled>Upload</button>
+      </div>
 
       <label for="transcript">Transcript (optional)</label>
       <input type="file" id="transcript" accept=".srt,.vtt,.txt,text/plain">
-      <p class="hint" style="margin:-8px 0 16px">SRT or VTT gives you auto-chapters. Plain TXT works too — you'll just get title + description, no chapters.</p>
-
-      <label class="checkrow" id="whisperRow" style="display:none">
-        <input type="checkbox" id="whisperChk" checked>
-        <span>No transcript? <b>Transcribe the audio with Whisper</b> after upload — it writes the title, description &amp; chapters for you, then pauses so you can review.</span>
-      </label>
 
       <label for="logline">Logline (optional)</label>
       <input type="text" id="logline" placeholder="One line about the film — used if it has little dialogue">
@@ -156,9 +163,7 @@
       <label for="description">Description</label>
       <textarea id="description" placeholder="Description — chapter timestamps appear here when generated from a timed transcript."></textarea>
 
-      <button id="uploadBtn" disabled>Upload</button>
       <button id="sendBtn" style="display:none">Send to YouTube</button>
-      <p class="hint" id="hint">Uploads straight to R2 (skips Render), then transfers to YouTube as a private video.</p>
 
       <div id="prog1" class="progress">
         <div class="pbar-label"><span id="p1label">Uploading to R2</span><span id="p1pct">0%</span></div>
@@ -201,20 +206,16 @@
       <input type="file" id="frameUpload" accept="image/*">
       <p class="hint" style="margin:-8px 0 14px">Pick an auto-grabbed frame, or upload your own still. <b>Drag the image to reposition it.</b></p>
 
-      <label>Image zoom <span id="zoomVal" class="ctlval">1.0&times;</span></label>
-      <input type="range" id="zoomRange" min="1" max="2.6" step="0.05" value="1">
-      <button id="resetFrameBtn" class="secondary" style="margin:-4px 0 18px">Reset frame position</button>
-
       <label>Image adjustments</label>
-      <label class="gradelbl">Saturation <span id="satVal" class="ctlval">100%</span></label>
-      <input type="range" id="satRange" min="0" max="2" step="0.05" value="1">
-      <label class="gradelbl">Contrast <span id="conVal" class="ctlval">100%</span></label>
-      <input type="range" id="conRange" min="0.5" max="1.8" step="0.05" value="1">
-      <label class="gradelbl">Brightness <span id="briVal" class="ctlval">100%</span></label>
-      <input type="range" id="briRange" min="0.5" max="1.5" step="0.05" value="1">
-      <label class="gradelbl">Sharpness <span id="shaVal" class="ctlval">0%</span></label>
-      <input type="range" id="shaRange" min="0" max="1" step="0.05" value="0">
-      <button id="resetGradeBtn" class="secondary" style="margin:2px 0 18px">Reset adjustments</button>
+      <div class="dialgrid">
+        <div class="dial" id="dZoom"><span class="dk">Zoom</span><span class="dv" id="zoomVal">1.0&times;</span></div>
+        <div class="dial" id="dSat"><span class="dk">Saturation</span><span class="dv" id="satVal">100%</span></div>
+        <div class="dial" id="dCon"><span class="dk">Contrast</span><span class="dv" id="conVal">100%</span></div>
+        <div class="dial" id="dBri"><span class="dk">Brightness</span><span class="dv" id="briVal">100%</span></div>
+        <div class="dial" id="dSha"><span class="dk">Sharpness</span><span class="dv" id="shaVal">0%</span></div>
+      </div>
+      <p class="dialhint">Drag a dial sideways to adjust &middot; double-tap to reset it.</p>
+      <button id="resetGradeBtn" class="secondary" style="margin:0 0 16px">Reset image</button>
 
       <label for="overlayText">Overlay text — one line per row</label>
       <textarea id="overlayText" style="min-height:84px" placeholder="The punchy text on the thumbnail"></textarea>
@@ -225,8 +226,8 @@
       <label>Highlight color</label>
       <div id="accentRow" class="swatches"></div>
 
-      <label>Text size <span id="sizeVal" class="ctlval">100%</span></label>
-      <input type="range" id="sizeRange" min="0.7" max="1.4" step="0.05" value="1">
+      <label>Text size</label>
+      <div style="display:flex; margin-bottom:14px"><div class="dial" id="dSize" style="min-width:120px"><span class="dk">Size</span><span class="dv" id="sizeVal">100%</span></div></div>
 
       <label>Text position</label>
       <div id="posGrid" class="posgrid"></div>
@@ -251,7 +252,7 @@
       </div>
     </div>
 
-    <div class="foot">v0.22 — step 3</div>
+    <div class="foot">v0.23 — step 3</div>
   </div>
 
   <script>
@@ -267,8 +268,6 @@
     const descInput = document.getElementById('description');
     const genBtn = document.getElementById('genBtn');
     const genStatus = document.getElementById('genStatus');
-    const whisperRow = document.getElementById('whisperRow');
-    const whisperChk = document.getElementById('whisperChk');
     const prog1 = document.getElementById('prog1');
     const progT = document.getElementById('progT');
     const prog2 = document.getElementById('prog2');
@@ -336,6 +335,8 @@
     }
 
     async function refreshStatus() {
+      ready = false;
+      var statusCard = document.getElementById('statusCard');
       try {
         const s = await (await fetch('/api/status')).json();
         aiReady = Boolean(s.aiConfigured);
@@ -360,7 +361,8 @@
         dot.className = 'dot warn';
         statusText.textContent = 'Could not reach server.';
       }
-      whisperRow.style.display = transcribeReady ? 'flex' : 'none';
+      // Slim: only surface the status card when something needs attention.
+      if (statusCard) statusCard.style.display = ready ? 'none' : 'block';
       if (msmReady) loadMsmProjects();
       updateBtn();
       renderAiNote();
@@ -389,8 +391,6 @@
     transcriptInput.addEventListener('change', () => {
       const f = transcriptInput.files[0];
       if (!f) { transcriptText = ''; updateGenBtn(); return; }
-      // Brought your own transcript? No need to auto-transcribe.
-      if (whisperChk) whisperChk.checked = false;
       const reader = new FileReader();
       reader.onload = () => { transcriptText = reader.result || ''; updateGenBtn(); };
       reader.onerror = () => { transcriptText = ''; updateGenBtn(); };
@@ -427,8 +427,6 @@
           titleInput.value = md.title || '';
           descInput.value = md.description || '';
           lastSynopsis = md.synopsis || ''; lastRawTitle = md.rawTitle || ''; lastChapters = md.chapters || '';
-          // Wrote it manually — don't also auto-transcribe over it on upload.
-          if (whisperChk) whisperChk.checked = false;
           genStatus.innerHTML = '<span style="color:#34c759">Done — edit the title or description below before uploading.</span>';
         }
       } catch (e) {
@@ -749,7 +747,7 @@
     uploadBtn.addEventListener('click', async () => {
       if (!fileInput.files.length) return;
       const file = fileInput.files[0];
-      const useWhisper = transcribeReady && whisperChk && whisperChk.checked;
+      const useWhisper = transcribeReady && !transcriptText.trim() && !titleInput.value.trim();
 
       uploadBtn.disabled = true;
       sendBtn.style.display = 'none';
@@ -1266,7 +1264,6 @@
       img.onload = function () {
         thumbFrameImg = img;
         bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; // fresh frame starts at cover
-        var zr = document.getElementById('zoomRange'); if (zr) zr.value = '1';
         var zv = document.getElementById('zoomVal'); if (zv) zv.textContent = '1.0\u00d7';
         rebuildGrade(true);
         drawThumb();
@@ -1380,47 +1377,63 @@
       canvas.addEventListener('pointercancel', end);
     })();
 
-    document.getElementById('zoomRange').addEventListener('input', function (e) {
-      bgScale = parseFloat(e.target.value);
-      document.getElementById('zoomVal').textContent = bgScale.toFixed(1) + '\u00d7';
-      scheduleGrade(false);
-    });
-    document.getElementById('zoomRange').addEventListener('change', function () { scheduleGrade(true); });
-
-    document.getElementById('resetFrameBtn').addEventListener('click', function () {
-      bgScale = 1; bgOffsetX = 0; bgOffsetY = 0;
-      document.getElementById('zoomRange').value = '1';
-      document.getElementById('zoomVal').textContent = '1.0\u00d7';
-      scheduleGrade(true);
-    });
-
-    document.getElementById('sizeRange').addEventListener('input', function (e) {
-      textScale = parseFloat(e.target.value);
-      document.getElementById('sizeVal').textContent = Math.round(textScale * 100) + '%';
-      drawThumb();
-    });
-
     function gradeReadout() {
+      document.getElementById('zoomVal').textContent = bgScale.toFixed(1) + '\u00d7';
+      document.getElementById('sizeVal').textContent = Math.round(textScale * 100) + '%';
       document.getElementById('satVal').textContent = Math.round(grade.sat * 100) + '%';
       document.getElementById('conVal').textContent = Math.round(grade.contrast * 100) + '%';
       document.getElementById('briVal').textContent = Math.round(grade.bright * 100) + '%';
       document.getElementById('shaVal').textContent = Math.round(grade.sharp * 100) + '%';
     }
-    (function () {
-      var sat = document.getElementById('satRange'), con = document.getElementById('conRange'),
-          bri = document.getElementById('briRange'), sha = document.getElementById('shaRange');
-      sat.addEventListener('input', function (e) { grade.sat = parseFloat(e.target.value); gradeReadout(); scheduleGrade(false); });
-      con.addEventListener('input', function (e) { grade.contrast = parseFloat(e.target.value); gradeReadout(); scheduleGrade(false); });
-      bri.addEventListener('input', function (e) { grade.bright = parseFloat(e.target.value); gradeReadout(); scheduleGrade(false); });
-      // Sharpness is the expensive one — show it live but rAF-throttled.
-      sha.addEventListener('input', function (e) { grade.sharp = parseFloat(e.target.value); gradeReadout(); scheduleGrade(true); });
-      [sat, con, bri, sha].forEach(function (el) { el.addEventListener('change', function () { scheduleGrade(true); }); });
-      document.getElementById('resetGradeBtn').addEventListener('click', function () {
-        grade = { sat: 1, contrast: 1, bright: 1, sharp: 0 };
-        sat.value = '1'; con.value = '1'; bri.value = '1'; sha.value = '0';
-        gradeReadout(); scheduleGrade(true);
+
+    // Scrub dial (MSM-style): drag sideways to change the value, double-tap to
+    // reset. ~200px of travel covers the full range.
+    function makeDial(id, opts) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      var valEl = el.querySelector('.dv');
+      function show() { valEl.textContent = opts.fmt(opts.get()); }
+      var dragging = false, sx = 0, base = 0, moved = false;
+      el.addEventListener('pointerdown', function (e) {
+        dragging = true; moved = false; sx = e.clientX; base = opts.get();
+        try { el.setPointerCapture(e.pointerId); } catch (_) { }
+        e.preventDefault();
       });
-    })();
+      el.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        var dx = e.clientX - sx;
+        if (Math.abs(dx) > 2) moved = true;
+        var v = base + (dx / 200) * (opts.max - opts.min);
+        v = Math.max(opts.min, Math.min(opts.max, v));
+        v = Math.round(v / opts.step) * opts.step;
+        opts.set(v); show(); if (opts.onInput) opts.onInput();
+      });
+      function end() { if (dragging) { dragging = false; if (opts.onChange) opts.onChange(); } }
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
+      el.addEventListener('dblclick', function () {
+        opts.set(opts.def); show();
+        if (opts.onInput) opts.onInput();
+        if (opts.onChange) opts.onChange();
+      });
+      show();
+    }
+
+    var pct = function (v) { return Math.round(v * 100) + '%'; };
+    var liveGrade = function () { scheduleGrade(false); }, finalGrade = function () { scheduleGrade(true); };
+    makeDial('dZoom', { get: function () { return bgScale; }, set: function (v) { bgScale = v; }, min: 1, max: 2.6, step: 0.05, def: 1, fmt: function (v) { return v.toFixed(1) + '\u00d7'; }, onInput: liveGrade, onChange: finalGrade });
+    makeDial('dSat', { get: function () { return grade.sat; }, set: function (v) { grade.sat = v; }, min: 0, max: 2, step: 0.05, def: 1, fmt: pct, onInput: liveGrade, onChange: finalGrade });
+    makeDial('dCon', { get: function () { return grade.contrast; }, set: function (v) { grade.contrast = v; }, min: 0.5, max: 1.8, step: 0.05, def: 1, fmt: pct, onInput: liveGrade, onChange: finalGrade });
+    makeDial('dBri', { get: function () { return grade.bright; }, set: function (v) { grade.bright = v; }, min: 0.5, max: 1.5, step: 0.05, def: 1, fmt: pct, onInput: liveGrade, onChange: finalGrade });
+    makeDial('dSha', { get: function () { return grade.sharp; }, set: function (v) { grade.sharp = v; }, min: 0, max: 1, step: 0.05, def: 0, fmt: pct, onInput: finalGrade, onChange: finalGrade });
+    makeDial('dSize', { get: function () { return textScale; }, set: function (v) { textScale = v; }, min: 0.7, max: 1.4, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+
+    // Unified reset for all image adjustments (zoom, pan, and grade).
+    document.getElementById('resetGradeBtn').addEventListener('click', function () {
+      bgScale = 1; bgOffsetX = 0; bgOffsetY = 0;
+      grade = { sat: 1, contrast: 1, bright: 1, sharp: 0 };
+      gradeReadout(); scheduleGrade(true);
+    });
 
     (function () {
       var seg = document.getElementById('styleToggle');
