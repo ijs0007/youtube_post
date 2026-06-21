@@ -384,7 +384,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Premiere · v0.42</div>
+    <div class="foot">Magic Premiere · v0.43</div>
   </div>
 
   <script>
@@ -1225,14 +1225,14 @@
       if (amount <= 0) return;
       var src = gctx.getImageData(0, 0, W, H), s = src.data;
       var out = gctx.createImageData(W, H), d = out.data;
-      var c = 1 + 4 * amount, e = -amount;
+      var c = 1 + 6 * amount, e = -1.5 * amount, R = 2;
       for (var y = 0; y < H; y++) {
         for (var x = 0; x < W; x++) {
           var i = (y * W + x) * 4;
-          var up = ((y > 0 ? y - 1 : 0) * W + x) * 4;
-          var dn = ((y < H - 1 ? y + 1 : H - 1) * W + x) * 4;
-          var lf = (y * W + (x > 0 ? x - 1 : 0)) * 4;
-          var rt = (y * W + (x < W - 1 ? x + 1 : W - 1)) * 4;
+          var up = ((y >= R ? y - R : 0) * W + x) * 4;
+          var dn = ((y < H - R ? y + R : H - 1) * W + x) * 4;
+          var lf = (y * W + (x >= R ? x - R : 0)) * 4;
+          var rt = (y * W + (x < W - R ? x + R : W - 1)) * 4;
           for (var ch = 0; ch < 3; ch++) {
             var v = c * s[i + ch] + e * (s[up + ch] + s[dn + ch] + s[lf + ch] + s[rt + ch]);
             d[i + ch] = v < 0 ? 0 : (v > 255 ? 255 : v);
@@ -1829,7 +1829,7 @@
       if (!el) return;
       var valEl = el.querySelector('.dv');
       function show() { valEl.textContent = opts.fmt(opts.get()); }
-      var dragging = false, sx = 0, base = 0, moved = false;
+      var dragging = false, sx = 0, base = 0, moved = false, lastTap = 0;
       el.addEventListener('pointerdown', function (e) {
         dragging = true; moved = false; sx = e.clientX; base = opts.get();
         try { el.setPointerCapture(e.pointerId); } catch (_) { }
@@ -1844,14 +1844,18 @@
         v = Math.round(v / opts.step) * opts.step;
         opts.set(v); show(); if (opts.onInput) opts.onInput();
       });
-      function end() { if (dragging) { dragging = false; if (opts.onChange) opts.onChange(); } }
+      function end() {
+        if (!dragging) return;
+        dragging = false;
+        if (!moved) {
+          var now = Date.now();
+          if (now - lastTap < 320) { lastTap = 0; opts.set(opts.def); show(); if (opts.onInput) opts.onInput(); }
+          else { lastTap = now; }
+        }
+        if (opts.onChange) opts.onChange();
+      }
       el.addEventListener('pointerup', end);
       el.addEventListener('pointercancel', end);
-      el.addEventListener('dblclick', function () {
-        opts.set(opts.def); show();
-        if (opts.onInput) opts.onInput();
-        if (opts.onChange) opts.onChange();
-      });
       show();
     }
 
