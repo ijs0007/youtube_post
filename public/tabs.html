@@ -467,14 +467,21 @@
         <button type="button" data-cb="highs">Highs</button>
         <button type="button" data-cb="offset">Global</button>
       </div>
-      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:6px">
         <div id="cbWheelWrap" style="position:relative;width:128px;height:128px;flex:0 0 auto">
           <canvas id="cbWheel" width="128" height="128" style="width:128px;height:128px;border-radius:50%;cursor:crosshair;touch-action:none;display:block"></canvas>
           <div id="cbHandle" style="position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #000;box-shadow:0 0 0 1px rgba(255,255,255,.9);transform:translate(-50%,-50%);left:64px;top:64px;pointer-events:none"></div>
+          <button type="button" id="cbWheelReset" title="Reset color for this range" style="position:absolute;top:-4px;right:-4px;width:22px;height:22px;border-radius:50%;background:rgba(18,18,20,.9);border:1px solid var(--line);color:var(--text-soft);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">&#8634;</button>
         </div>
-        <div style="flex:1 1 120px;min-width:0">
-          <p class="dialhint" style="margin:0 0 10px">Drag inside the wheel to tint the selected range &middot; center is neutral.</p>
-          <button type="button" id="cbReset" class="ghostbtn">Reset color balance</button>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex:0 0 auto">
+          <div id="cbLwrap" style="position:relative;width:30px;height:108px">
+            <div id="cbLtrack" style="position:absolute;inset:0;border-radius:15px;background:linear-gradient(to top,#0a0a0a,#7a7a7a 50%,#f4f4f4);cursor:ns-resize;touch-action:none;border:1px solid var(--line)"></div>
+            <div id="cbLhandle" style="position:absolute;left:50%;width:34px;height:10px;border-radius:5px;background:#fff;border:2px solid #000;box-shadow:0 0 0 1px rgba(255,255,255,.9);transform:translate(-50%,-50%);top:54px;pointer-events:none"></div>
+          </div>
+          <button type="button" id="cbLreset" title="Reset light/dark for this range" style="width:22px;height:22px;border-radius:50%;background:rgba(18,18,20,.9);border:1px solid var(--line);color:var(--text-soft);font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">&#8634;</button>
+        </div>
+        <div style="flex:1 1 110px;min-width:0">
+          <p class="dialhint" style="margin:0">Drag the wheel to tint &middot; drag the bar to brighten or darken &middot; both follow the selected range. Center is neutral.</p>
         </div>
       </div>
       <button id="resetGradeBtn" class="secondary" style="margin:0 0 16px">Reset image</button>
@@ -651,7 +658,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.67</div>
+    <div class="foot">Magic Marquee · v0.68</div>
   </div>
 
   <script>
@@ -736,7 +743,7 @@
     let borderStyle = 'brand'; // frame border: brand | white | black | accent | none
     let grade = { sat: 1, contrast: 1, bright: 1, sharp: 0 }; // non-destructive image adjustments
     let gradeReady = false;
-    var cbState = { shadows: { x: 0, y: 0 }, mids: { x: 0, y: 0 }, highs: { x: 0, y: 0 }, offset: { x: 0, y: 0 } };
+    var cbState = { shadows: { x: 0, y: 0, l: 0 }, mids: { x: 0, y: 0, l: 0 }, highs: { x: 0, y: 0, l: 0 }, offset: { x: 0, y: 0, l: 0 } };
     var cbSel = 'shadows';
     var cbSyncHandle = function () {};
     let gradeCanvas = document.createElement('canvas'); gradeCanvas.width = 1280; gradeCanvas.height = 720;
@@ -1541,8 +1548,9 @@
     // 3-way color balance: tint shadows/mids/highs by luminance weight, plus a global offset.
     function applyColorBalance(gctx, W, H) {
       var pS = colorPush(cbState.shadows), pM = colorPush(cbState.mids), pH = colorPush(cbState.highs), pO = colorPush(cbState.offset);
-      if (!pS && !pM && !pH && !pO) return;
-      var img = gctx.getImageData(0, 0, W, H), d = img.data, AMT = 130;
+      var sL = cbState.shadows.l || 0, mL = cbState.mids.l || 0, hL = cbState.highs.l || 0, oL = cbState.offset.l || 0;
+      if (!pS && !pM && !pH && !pO && !sL && !mL && !hL && !oL) return;
+      var img = gctx.getImageData(0, 0, W, H), d = img.data, AMT = 130, AMTL = 120;
       for (var i = 0; i < d.length; i += 4) {
         var Rr = d[i], Gg = d[i + 1], Bb = d[i + 2];
         var L = (0.299 * Rr + 0.587 * Gg + 0.114 * Bb) / 255;
@@ -1552,7 +1560,8 @@
         if (pM) { ar += pM.r * wM; ag += pM.g * wM; ab += pM.b * wM; }
         if (pH) { ar += pH.r * wH; ag += pH.g * wH; ab += pH.b * wH; }
         if (pO) { ar += pO.r; ag += pO.g; ab += pO.b; }
-        Rr += ar * AMT; Gg += ag * AMT; Bb += ab * AMT;
+        var lAdd = (sL * wS + mL * wM + hL * wH + oL) * AMTL;
+        Rr += ar * AMT + lAdd; Gg += ag * AMT + lAdd; Bb += ab * AMT + lAdd;
         d[i] = Rr < 0 ? 0 : Rr > 255 ? 255 : Rr;
         d[i + 1] = Gg < 0 ? 0 : Gg > 255 ? 255 : Gg;
         d[i + 2] = Bb < 0 ? 0 : Bb > 255 ? 255 : Bb;
@@ -2427,18 +2436,21 @@
     document.getElementById('resetGradeBtn').addEventListener('click', function () {
       bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; syncPosDials();
       grade = { sat: 1, contrast: 1, bright: 1, sharp: 0 };
-      cbState = { shadows: { x: 0, y: 0 }, mids: { x: 0, y: 0 }, highs: { x: 0, y: 0 }, offset: { x: 0, y: 0 } }; cbSyncHandle();
+      cbState = { shadows: { x: 0, y: 0, l: 0 }, mids: { x: 0, y: 0, l: 0 }, highs: { x: 0, y: 0, l: 0 }, offset: { x: 0, y: 0, l: 0 } }; cbSyncHandle();
       gradeReadout(); scheduleGrade(true);
     });
-    // ---- Color balance wheel (3-way + global) ----
+    // ---- Color balance: hue/sat wheel + lightness bar, both per-range ----
     (function () {
       var wheel = document.getElementById('cbWheel'); if (!wheel) return;
       var handle = document.getElementById('cbHandle'), R = wheel.width / 2;
+      var ltrack = document.getElementById('cbLtrack'), lhandle = document.getElementById('cbLhandle');
+      var LMID = 54, LSPAN = 50;
       drawWheel(wheel);
       cbSyncHandle = function () {
-        var p = cbState[cbSel] || { x: 0, y: 0 };
+        var p = cbState[cbSel] || { x: 0, y: 0, l: 0 };
         handle.style.left = (R + p.x * (R - 2)) + 'px';
         handle.style.top = (R + p.y * (R - 2)) + 'px';
+        if (lhandle) lhandle.style.top = (LMID - (p.l || 0) * LSPAN) + 'px';
       };
       cbSyncHandle();
       Array.prototype.forEach.call(document.querySelectorAll('#cbRange button'), function (b) {
@@ -2449,24 +2461,41 @@
           cbSyncHandle();
         });
       });
-      var dragging = false;
-      function setFromEvent(e, live) {
+      // hue/sat wheel drag (mutates x,y so lightness is preserved)
+      var dragW = false;
+      function wheelFrom(e, live) {
         var r = wheel.getBoundingClientRect();
         var x = ((e.clientX - r.left) - R) / (R - 2), y = ((e.clientY - r.top) - R) / (R - 2);
         var rad = Math.sqrt(x * x + y * y); if (rad > 1) { x /= rad; y /= rad; }
-        cbState[cbSel] = { x: x, y: y };
+        cbState[cbSel].x = x; cbState[cbSel].y = y;
         cbSyncHandle();
         if (live) liveGrade(); else finalGrade();
       }
-      wheel.addEventListener('pointerdown', function (e) { dragging = true; try { wheel.setPointerCapture(e.pointerId); } catch (err) { } setFromEvent(e, true); e.preventDefault(); });
-      wheel.addEventListener('pointermove', function (e) { if (dragging) { setFromEvent(e, true); e.preventDefault(); } });
-      wheel.addEventListener('pointerup', function (e) { if (dragging) { dragging = false; setFromEvent(e, false); } });
-      wheel.addEventListener('pointercancel', function () { if (dragging) { dragging = false; finalGrade(); } });
-      var cbReset = document.getElementById('cbReset');
-      if (cbReset) cbReset.addEventListener('click', function () {
-        cbState = { shadows: { x: 0, y: 0 }, mids: { x: 0, y: 0 }, highs: { x: 0, y: 0 }, offset: { x: 0, y: 0 } };
-        cbSyncHandle(); finalGrade();
-      });
+      wheel.addEventListener('pointerdown', function (e) { dragW = true; try { wheel.setPointerCapture(e.pointerId); } catch (err) { } wheelFrom(e, true); e.preventDefault(); });
+      wheel.addEventListener('pointermove', function (e) { if (dragW) { wheelFrom(e, true); e.preventDefault(); } });
+      wheel.addEventListener('pointerup', function (e) { if (dragW) { dragW = false; wheelFrom(e, false); } });
+      wheel.addEventListener('pointercancel', function () { if (dragW) { dragW = false; finalGrade(); } });
+      // lightness bar drag (top = lighter, bottom = darker)
+      var dragL = false;
+      function lightFrom(e, live) {
+        var r = ltrack.getBoundingClientRect();
+        var l = (LMID - (e.clientY - r.top)) / LSPAN;
+        if (l > 1) l = 1; if (l < -1) l = -1;
+        cbState[cbSel].l = l;
+        cbSyncHandle();
+        if (live) liveGrade(); else finalGrade();
+      }
+      if (ltrack) {
+        ltrack.addEventListener('pointerdown', function (e) { dragL = true; try { ltrack.setPointerCapture(e.pointerId); } catch (err) { } lightFrom(e, true); e.preventDefault(); });
+        ltrack.addEventListener('pointermove', function (e) { if (dragL) { lightFrom(e, true); e.preventDefault(); } });
+        ltrack.addEventListener('pointerup', function (e) { if (dragL) { dragL = false; lightFrom(e, false); } });
+        ltrack.addEventListener('pointercancel', function () { if (dragL) { dragL = false; finalGrade(); } });
+      }
+      // per-range resets
+      var wr = document.getElementById('cbWheelReset');
+      if (wr) wr.addEventListener('click', function () { cbState[cbSel].x = 0; cbState[cbSel].y = 0; cbSyncHandle(); finalGrade(); });
+      var lr = document.getElementById('cbLreset');
+      if (lr) lr.addEventListener('click', function () { cbState[cbSel].l = 0; cbSyncHandle(); finalGrade(); });
     })();
 
     (function () {
