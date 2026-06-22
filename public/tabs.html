@@ -475,6 +475,9 @@
         </div>
       </div>
 
+      <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;margin:-4px 0 2px;cursor:pointer"><input type="checkbox" id="fitToggle" checked>Fit each row to width</label>
+      <p class="hint" style="margin:0 0 14px">Off: each word keeps its own size — the row just gets wider.</p>
+
       <label style="margin-top:2px">Logo corner</label>
       <div id="logoGrid" class="logogrid">
         <button type="button" data-c="tl" aria-label="Top left">&#8598;</button>
@@ -575,7 +578,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.57</div>
+    <div class="foot">Magic Marquee · v0.58</div>
   </div>
 
   <script>
@@ -651,6 +654,7 @@
     let bgOffsetX = 0;            // background pan (canvas px)
     let bgOffsetY = 0;
     let textScale = 1;           // global text-size multiplier
+    let freeText = false;        // false = fit each row to width; true = absolute per-word sizing
     let accentColor = '#0eaaf5'; // highlight color for popped words
     let borderStyle = 'brand'; // frame border: brand | white | black | accent | none
     let grade = { sat: 1, contrast: 1, bright: 1, sharp: 0 }; // non-destructive image adjustments
@@ -1367,7 +1371,15 @@
         var line = lines[i], hasScale = false;
         for (var z = 0; z < line.length; z++) { if ((line[z].s || 1) !== 1) { hasScale = true; break; } }
         var fs, m;
-        if (!hasScale) {
+        if (freeText) {
+          // Free sizing: the row's base font is fixed from the words at scale 1, so
+          // growing one word never shrinks the others — the row just gets wider.
+          var text0 = line.map(function (w) { return w.t; }).join(' ');
+          var mBase = measure(text0, opts.maxFont);
+          fs = opts.maxFont;
+          if (mBase.w > opts.targetW) fs = Math.max(opts.minFont, opts.maxFont * (opts.targetW / mBase.w));
+          m = measureScaledLine(measure, line, fs);
+        } else if (!hasScale) {
           var text = line.map(function (w) { return w.t; }).join(' ');
           var mMax = measure(text, opts.maxFont);
           fs = opts.maxFont;
@@ -2274,6 +2286,19 @@
           }
         });
       }
+    })();
+
+    // Free text sizing: off = each word keeps its own size and the row grows wider
+    // instead of squeezing the other words. Sticky on this device.
+    (function () {
+      var t = document.getElementById('fitToggle');
+      if (!t) return;
+      try { if (localStorage.getItem('mp_freetext') === '1') { freeText = true; t.checked = false; } } catch (e) {}
+      t.addEventListener('change', function () {
+        freeText = !t.checked;
+        try { localStorage.setItem('mp_freetext', freeText ? '1' : '0'); } catch (e) {}
+        drawThumb();
+      });
     })();
 
     function logoDefault() { return thumbStyle === 'cinematic' ? 'tl' : 'bl'; }
