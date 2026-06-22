@@ -254,9 +254,10 @@
     .tab.done .tabring-arc { stroke:var(--good); }
     @keyframes tabspin { to { transform:rotate(360deg); } }
     /* ---- v0.55: custom color palette (border; per-style colors reuse it) ---- */
-    .swatchpick { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-    .swatchpick button { width:28px; height:28px; border-radius:50%; padding:0; border:2px solid transparent; cursor:pointer; }
+    .swatchpick { display:grid; grid-template-columns:repeat(8, minmax(0,1fr)); gap:6px; align-items:center; justify-items:center; }
+    .swatchpick button { width:100%; max-width:30px; aspect-ratio:1; height:auto; border-radius:50%; padding:0; border:2px solid transparent; cursor:pointer; }
     .swatchpick button.sel { border-color:#fff; box-shadow:0 0 0 2px var(--bg); }
+    .swatchpick .swatch-any { width:100%; max-width:30px; aspect-ratio:1; height:auto; }
     .swatch-any { width:28px; height:28px; border-radius:50%; position:relative; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; background:conic-gradient(from 0deg, #ff453a, #ff9f0a, #ffd60a, #30d158, #00e5ff, #0eaaf5, #7c4dff, #ff2d92, #ff453a); }
     .swatch-any input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; border:0; padding:0; }
     .swatch-any span { color:#fff; font-weight:700; font-size:15px; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.7); pointer-events:none; }
@@ -459,6 +460,23 @@
         <div class="dial" id="dSha"><span class="dk">Sharpness</span><span class="dv" id="shaVal">0%</span></div>
       </div>
       <p class="dialhint">Drag a dial sideways to adjust &middot; double-tap to reset it.</p>
+      <p style="font-size:11px;font-weight:700;color:var(--text-soft);letter-spacing:.04em;text-transform:uppercase;margin:14px 0 6px">Color balance</p>
+      <div id="cbRange" class="segmented" style="margin-bottom:10px">
+        <button type="button" data-cb="shadows" class="sel">Shadows</button>
+        <button type="button" data-cb="mids">Mids</button>
+        <button type="button" data-cb="highs">Highs</button>
+        <button type="button" data-cb="offset">Global</button>
+      </div>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+        <div id="cbWheelWrap" style="position:relative;width:128px;height:128px;flex:0 0 auto">
+          <canvas id="cbWheel" width="128" height="128" style="width:128px;height:128px;border-radius:50%;cursor:crosshair;touch-action:none;display:block"></canvas>
+          <div id="cbHandle" style="position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #000;box-shadow:0 0 0 1px rgba(255,255,255,.9);transform:translate(-50%,-50%);left:64px;top:64px;pointer-events:none"></div>
+        </div>
+        <div style="flex:1 1 120px;min-width:0">
+          <p class="dialhint" style="margin:0 0 10px">Drag inside the wheel to tint the selected range &middot; center is neutral.</p>
+          <button type="button" id="cbReset" class="ghostbtn">Reset color balance</button>
+        </div>
+      </div>
       <button id="resetGradeBtn" class="secondary" style="margin:0 0 16px">Reset image</button>
 
       <label>Video title</label>
@@ -502,12 +520,17 @@
         <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
           <div class="tt-block" style="flex:1 1 200px;min-width:0">
             <span class="tt-label">Shadow color</span>
-            <div id="fxShadowSw" class="swatchpick" style="display:grid;grid-template-columns:repeat(8,1fr);gap:8px;justify-items:center"></div>
+            <div id="fxShadowSw" class="swatchpick"></div>
           </div>
           <div class="tt-block" style="flex:0 0 auto">
             <span class="tt-label">Strength</span>
             <div class="dial" id="dShadowStr" style="min-width:88px"><span class="dk">Strength</span><span class="dv" id="shadowStrVal">100%</span></div>
           </div>
+        </div>
+        <div class="texttools" style="margin-top:10px">
+          <div class="tt-block"><span class="tt-label">Angle</span><div class="dial" id="dShadowAngle" style="min-width:76px"><span class="dk">Angle</span><span class="dv" id="shadowAngleVal">0&deg;</span></div></div>
+          <div class="tt-block"><span class="tt-label">Reach</span><div class="dial" id="dShadowReach" style="min-width:76px"><span class="dk">Reach</span><span class="dv" id="shadowReachVal">68%</span></div></div>
+          <div class="tt-block"><span class="tt-label">Softness</span><div class="dial" id="dShadowSoft" style="min-width:76px"><span class="dk">Soft</span><span class="dv" id="shadowSoftVal">50%</span></div></div>
         </div>
       </div>
       <div id="fxBlocks" style="display:none">
@@ -518,24 +541,24 @@
       </div>
       <div id="fxCustom" style="display:none">
         <div class="texttools">
-          <div class="tt-block"><span class="tt-label">Text color</span><div id="fxTextSw" class="swatchpick"></div></div>
+          <div class="tt-block" style="flex:1 1 100%"><span class="tt-label">Text color</span><div id="fxTextSw" class="swatchpick"></div></div>
         </div>
-        <label style="margin:10px 0 6px">Letter case</label>
+        <label style="margin:12px 0 6px">Letter case</label>
         <div id="caseToggle" class="segmented" style="margin-bottom:4px">
           <button type="button" data-case="none" class="sel">As typed</button>
           <button type="button" data-case="upper">UPPERCASE</button>
           <button type="button" data-case="lower">lowercase</button>
           <button type="button" data-case="title">Title</button>
         </div>
-        <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin:10px 0"><input type="checkbox" id="fxOutlineOn">Text outline</label>
-        <div class="texttools">
-          <div class="tt-block"><span class="tt-label">Outline width</span><div class="dial" id="dOutlineW" style="min-width:88px"><span class="dk">Width</span><span class="dv" id="outlineWVal">8</span></div></div>
-          <div class="tt-block"><span class="tt-label">Outline color</span><div id="fxOutlineSw" class="swatchpick"></div></div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin:12px 0 6px"><input type="checkbox" id="fxOutlineOn">Text outline</label>
+        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          <div class="tt-block" style="flex:1 1 190px;min-width:0"><span class="tt-label">Outline color</span><div id="fxOutlineSw" class="swatchpick"></div></div>
+          <div class="tt-block" style="flex:0 0 auto"><span class="tt-label">Width</span><div class="dial" id="dOutlineW" style="min-width:84px"><span class="dk">Width</span><span class="dv" id="outlineWVal">8</span></div></div>
         </div>
-        <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin:10px 0"><input type="checkbox" id="fxShadowTextOn" checked>Text shadow</label>
-        <div class="texttools">
-          <div class="tt-block"><span class="tt-label">Shadow strength</span><div class="dial" id="dTextShadowStr" style="min-width:88px"><span class="dk">Strength</span><span class="dv" id="textShadowStrVal">55%</span></div></div>
-          <div class="tt-block"><span class="tt-label">Shadow color</span><div id="fxTextShadowSw" class="swatchpick"></div></div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin:12px 0 6px"><input type="checkbox" id="fxShadowTextOn" checked>Text shadow</label>
+        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          <div class="tt-block" style="flex:1 1 190px;min-width:0"><span class="tt-label">Shadow color</span><div id="fxTextShadowSw" class="swatchpick"></div></div>
+          <div class="tt-block" style="flex:0 0 auto"><span class="tt-label">Strength</span><div class="dial" id="dTextShadowStr" style="min-width:84px"><span class="dk">Strength</span><span class="dv" id="textShadowStrVal">55%</span></div></div>
         </div>
       </div>
       <div id="tplCustom" style="display:none">
@@ -628,7 +651,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.64</div>
+    <div class="foot">Magic Marquee · v0.67</div>
   </div>
 
   <script>
@@ -713,6 +736,9 @@
     let borderStyle = 'brand'; // frame border: brand | white | black | accent | none
     let grade = { sat: 1, contrast: 1, bright: 1, sharp: 0 }; // non-destructive image adjustments
     let gradeReady = false;
+    var cbState = { shadows: { x: 0, y: 0 }, mids: { x: 0, y: 0 }, highs: { x: 0, y: 0 }, offset: { x: 0, y: 0 } };
+    var cbSel = 'shadows';
+    var cbSyncHandle = function () {};
     let gradeCanvas = document.createElement('canvas'); gradeCanvas.width = 1280; gradeCanvas.height = 720;
     let gradeRaf = null, gradePendingSharp = false;
     // Coalesce rapid slider/drag events into one render per frame. Pass
@@ -1496,6 +1522,60 @@
       } catch (_) { return false; }
     })();
     // Manual saturate -> contrast -> brightness (matches CSS filter order) for browsers without ctx.filter.
+    // HSV (h 0-360, s/v 0-1) -> [r,g,b] each 0-1
+    function hsvToRgb(h, s, v) {
+      var c = v * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c, r = 0, g = 0, b = 0;
+      if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
+      else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+      return [r + m, g + m, b + m];
+    }
+    // Wheel handle (x,y in -1..1) -> signed RGB push (or null at center).
+    function colorPush(p) {
+      if (!p) return null;
+      var r = Math.sqrt(p.x * p.x + p.y * p.y); if (r < 0.004) return null;
+      if (r > 1) r = 1;
+      var hue = ((Math.atan2(p.y, p.x) * 180 / Math.PI) + 360) % 360;
+      var rgb = hsvToRgb(hue, 1, 1);
+      return { r: (rgb[0] - 0.5) * r, g: (rgb[1] - 0.5) * r, b: (rgb[2] - 0.5) * r };
+    }
+    // 3-way color balance: tint shadows/mids/highs by luminance weight, plus a global offset.
+    function applyColorBalance(gctx, W, H) {
+      var pS = colorPush(cbState.shadows), pM = colorPush(cbState.mids), pH = colorPush(cbState.highs), pO = colorPush(cbState.offset);
+      if (!pS && !pM && !pH && !pO) return;
+      var img = gctx.getImageData(0, 0, W, H), d = img.data, AMT = 130;
+      for (var i = 0; i < d.length; i += 4) {
+        var Rr = d[i], Gg = d[i + 1], Bb = d[i + 2];
+        var L = (0.299 * Rr + 0.587 * Gg + 0.114 * Bb) / 255;
+        var wS = L < 0.5 ? (1 - 2 * L) : 0, wH = L > 0.5 ? (2 * L - 1) : 0, wM = 1 - wS - wH;
+        var ar = 0, ag = 0, ab = 0;
+        if (pS) { ar += pS.r * wS; ag += pS.g * wS; ab += pS.b * wS; }
+        if (pM) { ar += pM.r * wM; ag += pM.g * wM; ab += pM.b * wM; }
+        if (pH) { ar += pH.r * wH; ag += pH.g * wH; ab += pH.b * wH; }
+        if (pO) { ar += pO.r; ag += pO.g; ab += pO.b; }
+        Rr += ar * AMT; Gg += ag * AMT; Bb += ab * AMT;
+        d[i] = Rr < 0 ? 0 : Rr > 255 ? 255 : Rr;
+        d[i + 1] = Gg < 0 ? 0 : Gg > 255 ? 255 : Gg;
+        d[i + 2] = Bb < 0 ? 0 : Bb > 255 ? 255 : Bb;
+      }
+      gctx.putImageData(img, 0, 0);
+    }
+    // Render the hue/sat wheel into a canvas (once).
+    function drawWheel(cv) {
+      var ctx = cv.getContext('2d'), W = cv.width, H = cv.height, cx = W / 2, cy = H / 2, R = Math.min(cx, cy);
+      var img = ctx.createImageData(W, H), d = img.data;
+      for (var y = 0; y < H; y++) {
+        for (var x = 0; x < W; x++) {
+          var dx = x - cx, dy = y - cy, rr = Math.sqrt(dx * dx + dy * dy), idx = (y * W + x) * 4;
+          if (rr <= R) {
+            var hue = ((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360;
+            var rgb = hsvToRgb(hue, Math.min(1, rr / R), 1);
+            d[idx] = rgb[0] * 255; d[idx + 1] = rgb[1] * 255; d[idx + 2] = rgb[2] * 255;
+            d[idx + 3] = rr > R - 1.2 ? Math.max(0, (R - rr) / 1.2) * 255 : 255;
+          } else { d[idx + 3] = 0; }
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+    }
     function applyGradeManual(gctx, W, H) {
       var s = grade.sat, c = grade.contrast, br = grade.bright;
       if (s === 1 && c === 1 && br === 1) return;
@@ -1568,6 +1648,7 @@
         drawBackground(gctx, thumbFrameImg, 1280, 720);
         applyGradeManual(gctx, 1280, 720);
       }
+      applyColorBalance(gctx, 1280, 720);
       if (sharpen && grade.sharp > 0) sharpenImageData(gctx, 1280, 720, grade.sharp);
       gradeReady = true;
     }
@@ -1599,9 +1680,20 @@
     function drawScrim(ctx, W, H) {
       var fx = styleFx[thumbStyle] || styleFx.cinematic; if (!fx || !fx.on) return;
       var k = fx.strength, c = fx.color;
-      var g = ctx.createLinearGradient(0, H * 0.32, 0, H);
+      var ang = (fx.angle == null ? 0 : fx.angle);          // 0deg = shadow rises from the bottom
+      var extent = (fx.extent == null ? 0.68 : fx.extent);  // how far it reaches in (0..1)
+      var fall = (fx.falloff == null ? 0.5 : fx.falloff);   // 0 = hard edge, 1 = very soft
+      var rad = ang * Math.PI / 180;
+      var dx = Math.sin(rad), dy = Math.cos(rad);
+      var cxp = W / 2, cyp = H / 2;
+      var half = (Math.abs(dx) * W + Math.abs(dy) * H) / 2;
+      var g = ctx.createLinearGradient(cxp - dx * half, cyp - dy * half, cxp + dx * half, cyp + dy * half);
+      var start = Math.max(0, Math.min(0.98, 1 - extent));
+      var span = 1 - start;
+      var midPos = Math.min(0.999, start + span * (0.35 + 0.45 * (1 - fall)));
       g.addColorStop(0, hexToRgba(c, 0));
-      g.addColorStop(0.55, hexToRgba(c, Math.min(1, 0.45 * k)));
+      if (start > 0) g.addColorStop(start, hexToRgba(c, 0));
+      g.addColorStop(midPos, hexToRgba(c, Math.min(1, 0.45 * k)));
       g.addColorStop(1, hexToRgba(c, Math.min(1, 0.9 * k)));
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
@@ -1928,7 +2020,7 @@
     function buildSwatchPick(el, getCur, onPick) {
       if (!el) return;
       el.innerHTML = '';
-      ['#ffffff', '#000000'].concat(accentColors).forEach(function (col) {
+      ['#ffffff', '#808080', '#000000'].concat(accentColors).forEach(function (col) {
         var b = document.createElement('button');
         b.type = 'button'; b.style.background = col; b.setAttribute('data-col', col);
         if (col.toLowerCase() === String(getCur()).toLowerCase()) b.className = 'sel';
@@ -2004,6 +2096,7 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
       thumbStatus.innerHTML = '<span style="color:var(--text-soft)">Pulling frames from your film and writing the overlay…</span>';
       setThumbBtn.disabled = true;
+      busyTab = 'thumbnail'; busy('Grabbing frames\u2026', null);
       await ensureFont();
       buildPosGrid();
       buildAccentRow();
@@ -2059,6 +2152,7 @@
       });
 
       await Promise.all([textP, framesP]);
+      busyDone();
       if (thumbStatus.textContent.indexOf("Couldn't") === -1) {
         thumbStatus.innerHTML = '<span style="color:#34c759">Ready — tweak anything, then set it.</span>';
       }
@@ -2322,6 +2416,9 @@
     makeDial('dSha', { get: function () { return grade.sharp; }, set: function (v) { grade.sharp = v; }, min: 0, max: 1, step: 0.05, def: 0, fmt: pct, onInput: finalGrade, onChange: finalGrade });
     makeDial('dSize', { get: function () { return textScale; }, set: function (v) { textScale = v; }, min: 0.7, max: 1.4, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dShadowStr', { get: function () { return (styleFx[thumbStyle] && styleFx[thumbStyle].strength != null) ? styleFx[thumbStyle].strength : 1; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].strength = v; }, min: 0, max: 1.5, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+    makeDial('dShadowAngle', { get: function () { var f = styleFx[thumbStyle]; return (f && f.angle != null) ? f.angle : 0; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].angle = v; }, min: 0, max: 360, step: 5, def: 0, fmt: function (v) { return Math.round(v) + '\u00b0'; }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+    makeDial('dShadowReach', { get: function () { var f = styleFx[thumbStyle]; return (f && f.extent != null) ? f.extent : 0.68; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].extent = v; }, min: 0.1, max: 1, step: 0.02, def: 0.68, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+    makeDial('dShadowSoft', { get: function () { var f = styleFx[thumbStyle]; return (f && f.falloff != null) ? f.falloff : 0.5; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].falloff = v; }, min: 0, max: 1, step: 0.05, def: 0.5, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dBlockOp', { get: function () { return styleFx.blocks.opacity; }, set: function (v) { styleFx.blocks.opacity = v; }, min: 0, max: 1, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dOutlineW', { get: function () { return customOutline.width; }, set: function (v) { customOutline.width = v; }, min: 0, max: 24, step: 1, def: 8, fmt: function (v) { return Math.round(v); }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dTextShadowStr', { get: function () { return customShadow.strength; }, set: function (v) { customShadow.strength = v; }, min: 0, max: 1, step: 0.05, def: 0.55, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
@@ -2330,8 +2427,47 @@
     document.getElementById('resetGradeBtn').addEventListener('click', function () {
       bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; syncPosDials();
       grade = { sat: 1, contrast: 1, bright: 1, sharp: 0 };
+      cbState = { shadows: { x: 0, y: 0 }, mids: { x: 0, y: 0 }, highs: { x: 0, y: 0 }, offset: { x: 0, y: 0 } }; cbSyncHandle();
       gradeReadout(); scheduleGrade(true);
     });
+    // ---- Color balance wheel (3-way + global) ----
+    (function () {
+      var wheel = document.getElementById('cbWheel'); if (!wheel) return;
+      var handle = document.getElementById('cbHandle'), R = wheel.width / 2;
+      drawWheel(wheel);
+      cbSyncHandle = function () {
+        var p = cbState[cbSel] || { x: 0, y: 0 };
+        handle.style.left = (R + p.x * (R - 2)) + 'px';
+        handle.style.top = (R + p.y * (R - 2)) + 'px';
+      };
+      cbSyncHandle();
+      Array.prototype.forEach.call(document.querySelectorAll('#cbRange button'), function (b) {
+        b.addEventListener('click', function () {
+          cbSel = b.getAttribute('data-cb');
+          Array.prototype.forEach.call(document.querySelectorAll('#cbRange button'), function (c) { c.classList.remove('sel'); });
+          b.classList.add('sel');
+          cbSyncHandle();
+        });
+      });
+      var dragging = false;
+      function setFromEvent(e, live) {
+        var r = wheel.getBoundingClientRect();
+        var x = ((e.clientX - r.left) - R) / (R - 2), y = ((e.clientY - r.top) - R) / (R - 2);
+        var rad = Math.sqrt(x * x + y * y); if (rad > 1) { x /= rad; y /= rad; }
+        cbState[cbSel] = { x: x, y: y };
+        cbSyncHandle();
+        if (live) liveGrade(); else finalGrade();
+      }
+      wheel.addEventListener('pointerdown', function (e) { dragging = true; try { wheel.setPointerCapture(e.pointerId); } catch (err) { } setFromEvent(e, true); e.preventDefault(); });
+      wheel.addEventListener('pointermove', function (e) { if (dragging) { setFromEvent(e, true); e.preventDefault(); } });
+      wheel.addEventListener('pointerup', function (e) { if (dragging) { dragging = false; setFromEvent(e, false); } });
+      wheel.addEventListener('pointercancel', function () { if (dragging) { dragging = false; finalGrade(); } });
+      var cbReset = document.getElementById('cbReset');
+      if (cbReset) cbReset.addEventListener('click', function () {
+        cbState = { shadows: { x: 0, y: 0 }, mids: { x: 0, y: 0 }, highs: { x: 0, y: 0 }, offset: { x: 0, y: 0 } };
+        cbSyncHandle(); finalGrade();
+      });
+    })();
 
     (function () {
       var seg = document.getElementById('styleToggle');
@@ -2424,7 +2560,7 @@
         textColor: customTextColor,
         outline: { on: customOutline.on, width: customOutline.width, color: customOutline.color },
         shadow: { on: customShadow.on, color: customShadow.color, strength: customShadow.strength },
-        scrim: { on: sc.on, strength: sc.strength, color: sc.color },
+        scrim: { on: sc.on, strength: sc.strength, color: sc.color, angle: (sc.angle == null ? 0 : sc.angle), extent: (sc.extent == null ? 0.68 : sc.extent), falloff: (sc.falloff == null ? 0.5 : sc.falloff) },
         case: customCase,
         freeText: freeText
       };
@@ -2438,6 +2574,9 @@
       setDV('dOutlineW', Math.round(customOutline.width));
       setDV('dTextShadowStr', Math.round(customShadow.strength * 100) + '%');
       setDV('dShadowStr', Math.round(((styleFx.custom && styleFx.custom.strength) || 0) * 100) + '%');
+      setDV('dShadowAngle', Math.round(styleFx.custom && styleFx.custom.angle != null ? styleFx.custom.angle : 0) + '\u00b0');
+      setDV('dShadowReach', Math.round((styleFx.custom && styleFx.custom.extent != null ? styleFx.custom.extent : 0.68) * 100) + '%');
+      setDV('dShadowSoft', Math.round((styleFx.custom && styleFx.custom.falloff != null ? styleFx.custom.falloff : 0.5) * 100) + '%');
       setDV('dSize', Math.round(textScale * 100) + '%');
       if (document.getElementById('fxTextSw')) buildSwatchPick(document.getElementById('fxTextSw'), function () { return customTextColor; }, function (c) { customTextColor = c; drawThumb(); });
       if (document.getElementById('fxOutlineSw')) buildSwatchPick(document.getElementById('fxOutlineSw'), function () { return customOutline.color; }, function (c) { customOutline.color = c; drawThumb(); });
@@ -2466,7 +2605,7 @@
       if (s.textColor) customTextColor = s.textColor;
       if (s.outline) customOutline = { on: !!s.outline.on, width: (s.outline.width != null ? s.outline.width : 8), color: s.outline.color || '#000000' };
       if (s.shadow) customShadow = { on: !!s.shadow.on, color: s.shadow.color || '#000000', strength: (s.shadow.strength != null ? s.shadow.strength : 0.55) };
-      if (s.scrim) styleFx.custom = { on: !!s.scrim.on, strength: (s.scrim.strength != null ? s.scrim.strength : 1), color: s.scrim.color || '#000000' };
+      if (s.scrim) styleFx.custom = { on: !!s.scrim.on, strength: (s.scrim.strength != null ? s.scrim.strength : 1), color: s.scrim.color || '#000000', angle: (s.scrim.angle == null ? 0 : s.scrim.angle), extent: (s.scrim.extent == null ? 0.68 : s.scrim.extent), falloff: (s.scrim.falloff == null ? 0.5 : s.scrim.falloff) };
       if (typeof s.freeText === 'boolean') freeText = s.freeText;
       customCase = s.case || 'none';
     }
@@ -2584,6 +2723,9 @@
         var fx = styleFx[thumbStyle];
         var on = document.getElementById('fxShadowOn'); if (on) on.checked = !!fx.on;
         var sv = document.getElementById('shadowStrVal'); if (sv) sv.textContent = Math.round(fx.strength * 100) + '%';
+        var av = document.getElementById('shadowAngleVal'); if (av) av.textContent = Math.round(fx.angle == null ? 0 : fx.angle) + '\u00b0';
+        var rv = document.getElementById('shadowReachVal'); if (rv) rv.textContent = Math.round((fx.extent == null ? 0.68 : fx.extent) * 100) + '%';
+        var fv = document.getElementById('shadowSoftVal'); if (fv) fv.textContent = Math.round((fx.falloff == null ? 0.5 : fx.falloff) * 100) + '%';
         buildSwatchPick(document.getElementById('fxShadowSw'), function () { return styleFx[thumbStyle].color; }, function (col) { styleFx[thumbStyle].color = col; drawThumb(); });
       }
     }
