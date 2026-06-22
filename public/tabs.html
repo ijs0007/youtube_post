@@ -658,7 +658,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.68</div>
+    <div class="foot">Magic Marquee · v0.69</div>
   </div>
 
   <script>
@@ -1859,19 +1859,19 @@
         ctx.drawImage(gradeCanvas, 0, 0);
       } else { ctx.fillStyle = '#0d0d10'; ctx.fillRect(0, 0, 1280, 720); }
       if (thumbStyle === 'cinematic') {
-        if (!overlayHidden) { drawScrim(ctx, 1280, 720); drawOverlayClean(ctx, 1280, 720); }
+        drawScrim(ctx, 1280, 720); if (!overlayHidden) drawOverlayClean(ctx, 1280, 720);
         drawBorder(ctx, 1280, 720, true);
         drawBadge(ctx, 1280, 720, badgeCorner || 'tl', true);
       } else if (thumbStyle === 'spotlight') {
-        if (!overlayHidden) { drawSpotlight(ctx, 1280, 720); drawOverlaySpotlight(ctx, 1280, 720); }
+        drawSpotlight(ctx, 1280, 720); if (!overlayHidden) drawOverlaySpotlight(ctx, 1280, 720);
         drawBorder(ctx, 1280, 720, true);
         drawBadge(ctx, 1280, 720, badgeCorner || 'bl', true);
       } else if (thumbStyle === 'sidebar') {
-        if (!overlayHidden) { drawSidebarPanel(ctx, 1280, 720); drawOverlaySidebar(ctx, 1280, 720); }
+        drawSidebarPanel(ctx, 1280, 720); if (!overlayHidden) drawOverlaySidebar(ctx, 1280, 720);
         drawBorder(ctx, 1280, 720, true);
         drawBadge(ctx, 1280, 720, badgeCorner || 'bl', true);
       } else if (thumbStyle === 'custom') {
-        if (!overlayHidden) { drawScrim(ctx, 1280, 720); drawOverlayClean(ctx, 1280, 720); }
+        drawScrim(ctx, 1280, 720); if (!overlayHidden) drawOverlayClean(ctx, 1280, 720);
         drawBorder(ctx, 1280, 720, true);
         drawBadge(ctx, 1280, 720, badgeCorner || 'bl', true);
       } else {
