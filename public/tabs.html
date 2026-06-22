@@ -128,7 +128,7 @@
     .framespin { display:inline-flex; align-items:center; gap:9px; height:62px; padding:0 4px; color:var(--text-soft); font-size:13px; }
     .framespin .sp { width:18px; height:18px; flex:none; border-radius:50%; border:2px solid rgba(255,255,255,.22); border-top-color:var(--accent); animation:topbusyspin .7s linear infinite; }
     .tabs { display:flex; gap:8px; margin-bottom:16px; }
-    .tab { width:auto; flex:1; background:var(--chip); color:var(--text); font-weight:600; padding:10px 14px; border-radius:11px; }
+    .tab { width:auto; flex:1; display:flex; align-items:center; justify-content:center; gap:7px; position:relative; background:var(--chip); color:var(--text); font-weight:600; padding:10px 14px; border-radius:11px; }
     .tab.active { background:var(--accent); color:#fff; }
     .field { margin-bottom:14px; }
     .field label { margin-bottom:6px; }
@@ -209,12 +209,12 @@
     .statusstrip #topBusyLabel { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
     .placeholder { color:var(--text-soft); font-size:13.5px; line-height:1.55; text-align:center; }
     .placeholder b { color:var(--text); font-weight:600; }
-    .texttools { display:flex; flex-wrap:wrap; gap:16px 22px; align-items:flex-start; margin-bottom:16px; }
+    .texttools { display:flex; flex-wrap:wrap; gap:16px 16px; align-items:flex-start; margin-bottom:16px; }
     .tt-block { display:flex; flex-direction:column; gap:8px; }
     .tt-label { font-size:11px; font-weight:700; color:var(--text-soft); letter-spacing:.04em; text-transform:uppercase; }
     .texttools .swatches { grid-template-columns:repeat(4,30px); margin-bottom:0; }
     .texttools .posgrid { margin-bottom:0; }
-    .texttools .dial { min-width:108px; }
+    .texttools .dial { min-width:60px; }
     /* ---- v0.51: row-style options, template drawers, 16:9 placeholder ---- */
     .optcard { padding-top:16px; }
     .optbanner { display:flex; align-items:center; gap:8px; background:var(--accent-soft); color:var(--accent); border-radius:10px; padding:10px 13px; font-size:13px; font-weight:600; line-height:1.4; margin-bottom:6px; }
@@ -237,6 +237,19 @@
     .ph169-cap { color:var(--text-soft); font-size:13px; font-weight:600; }
     .ph-hint { color:var(--text-soft); font-size:13px; line-height:1.5; text-align:center; margin:0; }
     .ph-hint b { color:var(--text); font-weight:600; }
+    /* ---- v0.52: working ring on the active job's tab ---- */
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    .tabring { width:15px; height:15px; flex:none; display:none; }
+    .tab.working .tabring { display:inline-block; }
+    .tabring svg { width:15px; height:15px; display:block; transform:rotate(-90deg); }
+    .tabring-track { fill:none; stroke:var(--border); stroke-width:2.6; }
+    .tab.active .tabring-track { stroke:rgba(255,255,255,.35); }
+    .tabring-arc { fill:none; stroke:var(--accent); stroke-width:2.6; stroke-linecap:round; stroke-dasharray:56.5; stroke-dashoffset:56.5; transition:stroke-dashoffset .3s ease; }
+    .tab.active .tabring-arc { stroke:#fff; }
+    .tab.working.indet .tabring svg { transform:none; animation:tabspin .8s linear infinite; }
+    .tab.working.indet .tabring-arc { stroke-dasharray:14 42; stroke-dashoffset:0; transition:none; }
+    .tab.done .tabring-arc { stroke:var(--good); }
+    @keyframes tabspin { to { transform:rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -256,12 +269,12 @@
     </div>
 
     <div class="tabs">
-      <button class="tab active" id="tabPublish">Publish</button>
-      <button class="tab" id="tabThumbnail">Thumbnail</button>
+      <button class="tab active" id="tabPublish"><span class="tabring" aria-hidden="true"><svg viewBox="0 0 24 24"><circle class="tabring-track" cx="12" cy="12" r="9"></circle><circle class="tabring-arc" cx="12" cy="12" r="9"></circle></svg></span>Publish</button>
+      <button class="tab" id="tabThumbnail"><span class="tabring" aria-hidden="true"><svg viewBox="0 0 24 24"><circle class="tabring-track" cx="12" cy="12" r="9"></circle><circle class="tabring-arc" cx="12" cy="12" r="9"></circle></svg></span>Thumbnail</button>
       <button class="tab" id="tabOptions">Upload options</button>
     </div>
 
-    <div id="topBusy" class="statusstrip" aria-live="polite"><span class="topbusy-spin"></span><span id="topBusyLabel">Ready</span><span id="topBusyPct" class="topbusy-pct"></span></div>
+    <span id="busyLive" class="sr-only" aria-live="polite"></span>
 
     <div id="publishView" class="panel">
       <div class="card" id="statusCard">
@@ -445,7 +458,7 @@
         </div>
         <div class="tt-block">
           <span class="tt-label">Size</span>
-          <div class="dial" id="dSize" style="min-width:108px"><span class="dk">Size</span><span class="dv" id="sizeVal">100%</span></div>
+          <div class="dial" id="dSize" style="min-width:60px"><span class="dk">Size</span><span class="dv" id="sizeVal">100%</span></div>
         </div>
       </div>
 
@@ -526,7 +539,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.51</div>
+    <div class="foot">Magic Marquee · v0.52</div>
   </div>
 
   <script>
@@ -612,18 +625,50 @@
       });
     }
 
-    // ---- Top status pill: an always-visible spinner for long jobs, since the
-    // detailed progress bars sit lower in the card and can fall below the fold.
-    var topBusy = document.getElementById('topBusy');
-    var topBusyLabel = document.getElementById('topBusyLabel');
-    var topBusyPct = document.getElementById('topBusyPct');
+    // ---- Working indicator: a slim ring on the tab that owns the current job.
+    // It fills with the upload %, spins for percent-less stages, then completes
+    // and fades. The exact stage + percent live in the Status section in Publish.
+    var busyTabs = {
+      publish: document.getElementById('tabPublish'),
+      thumbnail: document.getElementById('tabThumbnail'),
+      options: document.getElementById('tabOptions')
+    };
+    var busyLive = document.getElementById('busyLive');
+    var RING_C = 56.5;
+    var busyTab = 'publish';
+    var busyDoneTimer = null;
+    function busyArc(el) { return el ? el.querySelector('.tabring-arc') : null; }
     function busy(label, pct) {
-      if (!topBusy) return;
-      if (label != null) topBusyLabel.textContent = label;
-      topBusyPct.textContent = (pct == null || pct === '') ? '' : (pct + '%');
-      topBusy.classList.add('active');
+      if (busyLive && label != null) busyLive.textContent = label;
+      var el = busyTabs[busyTab]; if (!el) return;
+      clearTimeout(busyDoneTimer); el.classList.remove('done');
+      el.classList.add('working');
+      var arc = busyArc(el);
+      if (pct == null || pct === '') {
+        el.classList.add('indet');
+        if (arc) { arc.style.transition = 'none'; arc.style.strokeDasharray = ''; arc.style.strokeDashoffset = ''; }
+      } else {
+        el.classList.remove('indet');
+        var p = Math.max(0, Math.min(100, Number(pct))) / 100;
+        if (arc) { arc.style.transition = ''; arc.style.strokeDashoffset = (RING_C * (1 - p)).toFixed(1); }
+      }
     }
-    function busyDone() { if (topBusy) { topBusy.classList.remove('active'); topBusyLabel.textContent = 'Ready'; topBusyPct.textContent = ''; } }
+    function busyDone() {
+      if (busyLive) busyLive.textContent = '';
+      var el = busyTabs[busyTab];
+      if (el) {
+        var arc = busyArc(el);
+        el.classList.remove('indet');
+        if (arc) { arc.style.transition = ''; arc.style.strokeDashoffset = '0'; }
+        el.classList.add('done');
+        clearTimeout(busyDoneTimer);
+        busyDoneTimer = setTimeout(function () {
+          el.classList.remove('working', 'done');
+          if (arc) arc.style.strokeDashoffset = String(RING_C);
+        }, 700);
+      }
+      busyTab = 'publish';
+    }
 
     async function refreshStatus() {
       ready = false;
@@ -1952,7 +1997,7 @@
       if (needImg && !img64) { es.innerHTML = '<span class="err">Pick a frame first.</span>'; return; }
       es.innerHTML = '<span style="color:var(--text-soft)">Enhancing… this can take 15–45 seconds.</span>';
       setEnhBusy(true);
-      busy('Enhancing…', null);
+      busyTab = 'thumbnail'; busy('Enhancing…', null);
       fetch('/api/thumb/enhance', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2262,7 +2307,7 @@
     if (nTitleBtn) nTitleBtn.addEventListener('click', function () {
       var seed = titleSeed();
       if (!seed) { thumbStatus.innerHTML = '<span style="color:#ff9f0a">Nothing to base a title on yet.</span>'; return; }
-      nTitleBtn.disabled = true; busy('Writing new title\u2026', null);
+      nTitleBtn.disabled = true; busyTab = 'thumbnail'; busy('Writing new title\u2026', null);
       generateMetadata('', seed).then(function (md) {
         if (md && md.title) { titleInput.value = md.title; lastRawTitle = md.rawTitle || lastRawTitle; setThumbTitleView(); }
       }).catch(function () { }).then(function () { busyDone(); nTitleBtn.disabled = false; });
@@ -2277,7 +2322,7 @@
     });
     var nTextBtn = document.getElementById('newTextBtn');
     if (nTextBtn) nTextBtn.addEventListener('click', function () {
-      nTextBtn.disabled = true; busy('Writing new text\u2026', null);
+      nTextBtn.disabled = true; busyTab = 'thumbnail'; busy('Writing new text\u2026', null);
       fetch('/api/thumb/text', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: lastRawTitle || titleInput.value || '', synopsis: lastSynopsis || descInput.value || '' })
@@ -2292,7 +2337,7 @@
     var moreFramesBtn = document.getElementById('moreFramesBtn');
     if (moreFramesBtn) moreFramesBtn.addEventListener('click', function () {
       if (!lastUploadKey) { thumbStatus.innerHTML = '<span style="color:#ff9f0a">No film loaded to pull frames from.</span>'; return; }
-      moreFramesBtn.disabled = true; busy('Pulling new frames\u2026', null);
+      moreFramesBtn.disabled = true; busyTab = 'thumbnail'; busy('Pulling new frames\u2026', null);
       frameStripLoading('Grabbing new frames...');
       frameRound++;
       fetch('/api/thumb/frames', {
