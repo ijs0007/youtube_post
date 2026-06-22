@@ -515,6 +515,15 @@
           <div class="tt-block"><span class="tt-label">Shadow color</span><div id="fxTextShadowSw" class="swatchpick"></div></div>
         </div>
       </div>
+      <div id="tplCustom" style="display:none">
+        <label style="margin-top:2px">Saved looks</label>
+        <p class="hint" style="margin:0 0 8px">Save this look — colors, outline, shadow, scrim, border, position — to reuse later. Your headline and image aren't saved. Up to 8.</p>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+          <input id="tplName" type="text" placeholder="Name this look" maxlength="24" style="flex:1;min-width:0;padding:9px 11px;border-radius:10px;border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.06);color:#fff;font-size:14px;font-family:inherit">
+          <button type="button" id="tplSave" style="padding:9px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.08);color:#fff;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap">Save</button>
+        </div>
+        <div id="tplList" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
 
       <button id="setThumbBtn" disabled>Set as YouTube thumbnail</button>
       <button id="downloadThumbBtn" class="secondary" style="margin-top:8px">Download thumbnail</button>
@@ -593,7 +602,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.59</div>
+    <div class="foot">Magic Marquee · v0.60</div>
   </div>
 
   <script>
@@ -2341,6 +2350,102 @@
       if (ts) ts.addEventListener('change', function () { customShadow.on = ts.checked; drawThumb(); });
     })();
 
+    // ---- Custom-room saved looks (templates) ----
+    var TPL_KEY = 'mp_customtpls', TPL_MAX = 8;
+    function loadTpls() { try { var a = JSON.parse(localStorage.getItem(TPL_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+    function saveTpls(a) { try { localStorage.setItem(TPL_KEY, JSON.stringify(a.slice(0, TPL_MAX))); } catch (e) {} }
+    function captureCustom() {
+      var sc = styleFx.custom || { on: false, strength: 1, color: '#000000' };
+      return {
+        pos: thumbPos, scale: textScale, accent: accentColor,
+        border: borderStyle, borderCustom: borderCustom, badge: badgeCorner,
+        textColor: customTextColor,
+        outline: { on: customOutline.on, width: customOutline.width, color: customOutline.color },
+        shadow: { on: customShadow.on, color: customShadow.color, strength: customShadow.strength },
+        scrim: { on: sc.on, strength: sc.strength, color: sc.color },
+        freeText: freeText
+      };
+    }
+    function setDV(id, txt) { var el = document.getElementById(id); if (el) { var dv = el.querySelector('.dv'); if (dv) dv.textContent = txt; } }
+    function refreshCustomUI() {
+      var o = document.getElementById('fxOutlineOn'); if (o) o.checked = !!customOutline.on;
+      var ts = document.getElementById('fxShadowTextOn'); if (ts) ts.checked = !!customShadow.on;
+      var so = document.getElementById('fxShadowOn'); if (so) so.checked = !!(styleFx.custom && styleFx.custom.on);
+      var ft = document.getElementById('fitToggle'); if (ft) ft.checked = !freeText;
+      setDV('dOutlineW', Math.round(customOutline.width));
+      setDV('dTextShadowStr', Math.round(customShadow.strength * 100) + '%');
+      setDV('dShadowStr', Math.round(((styleFx.custom && styleFx.custom.strength) || 0) * 100) + '%');
+      setDV('dSize', Math.round(textScale * 100) + '%');
+      if (document.getElementById('fxTextSw')) buildSwatchPick(document.getElementById('fxTextSw'), function () { return customTextColor; }, function (c) { customTextColor = c; drawThumb(); });
+      if (document.getElementById('fxOutlineSw')) buildSwatchPick(document.getElementById('fxOutlineSw'), function () { return customOutline.color; }, function (c) { customOutline.color = c; drawThumb(); });
+      if (document.getElementById('fxTextShadowSw')) buildSwatchPick(document.getElementById('fxTextShadowSw'), function () { return customShadow.color; }, function (c) { customShadow.color = c; drawThumb(); });
+      if (document.getElementById('fxShadowSw')) buildSwatchPick(document.getElementById('fxShadowSw'), function () { return (styleFx.custom || {}).color || '#000000'; }, function (c) { styleFx.custom = styleFx.custom || { on: false, strength: 1, color: '#000000' }; styleFx.custom.color = c; drawThumb(); });
+      buildAccentRow();
+      var bt = document.getElementById('borderToggle');
+      if (bt) Array.prototype.forEach.call(bt.querySelectorAll('button'), function (b) { b.classList.toggle('sel', b.getAttribute('data-border') === borderStyle); });
+      var bcr = document.getElementById('borderCustomRow');
+      if (bcr) { bcr.style.display = (borderStyle === 'custom') ? 'flex' : 'none'; buildSwatchPick(bcr, function () { return borderCustom; }, function (c) { borderCustom = c; drawThumb(); }); }
+      buildPosGrid(); syncLogoGrid();
+      if (typeof syncPosDials === 'function') syncPosDials();
+      if (typeof renderChips === 'function') renderChips();
+      syncStyleFx();
+    }
+    function applyCustom(s) {
+      if (!s) return;
+      if (s.pos) thumbPos = s.pos;
+      if (s.scale != null) textScale = s.scale;
+      if (s.accent) accentColor = s.accent;
+      if (s.border) borderStyle = s.border;
+      if (s.borderCustom) borderCustom = s.borderCustom;
+      if (s.badge != null) badgeCorner = s.badge;
+      if (s.textColor) customTextColor = s.textColor;
+      if (s.outline) customOutline = { on: !!s.outline.on, width: (s.outline.width != null ? s.outline.width : 8), color: s.outline.color || '#000000' };
+      if (s.shadow) customShadow = { on: !!s.shadow.on, color: s.shadow.color || '#000000', strength: (s.shadow.strength != null ? s.shadow.strength : 0.55) };
+      if (s.scrim) styleFx.custom = { on: !!s.scrim.on, strength: (s.scrim.strength != null ? s.scrim.strength : 1), color: s.scrim.color || '#000000' };
+      if (typeof s.freeText === 'boolean') freeText = s.freeText;
+      refreshCustomUI();
+      drawThumb();
+    }
+    function renderTpls() {
+      var list = document.getElementById('tplList'); if (!list) return;
+      var arr = loadTpls();
+      list.innerHTML = '';
+      if (!arr.length) {
+        var none = document.createElement('p'); none.className = 'hint'; none.style.margin = '0'; none.textContent = 'No saved looks yet.'; list.appendChild(none);
+      }
+      arr.forEach(function (t, i) {
+        var row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:6px';
+        var load = document.createElement('button'); load.type = 'button';
+        load.style.cssText = 'flex:1;text-align:left;padding:9px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:#fff;font-size:14px;font-weight:600;cursor:pointer';
+        load.textContent = t.name || ('Look ' + (i + 1));
+        load.addEventListener('click', function () { applyCustom(t.settings); });
+        var del = document.createElement('button'); del.type = 'button'; del.setAttribute('aria-label', 'Delete'); del.innerHTML = '&times;';
+        del.style.cssText = 'width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.05);color:#bbb;font-size:18px;line-height:1;cursor:pointer;flex:none';
+        del.addEventListener('click', function (e) { e.stopPropagation(); var a = loadTpls(); a.splice(i, 1); saveTpls(a); renderTpls(); });
+        row.appendChild(load); row.appendChild(del); list.appendChild(row);
+      });
+      var save = document.getElementById('tplSave');
+      if (save) { var full = arr.length >= TPL_MAX; save.disabled = full; save.style.opacity = full ? '0.5' : '1'; save.textContent = full ? 'Full (8)' : 'Save'; }
+    }
+    (function () {
+      var STARTERS = [
+        { name: 'Bold Punch', settings: { pos: 'bl', scale: 1, accent: '#ffd60a', border: 'brand', borderCustom: '#f45911', badge: 'bl', textColor: '#ffffff', outline: { on: true, width: 12, color: '#000000' }, shadow: { on: false, color: '#000000', strength: 0.55 }, scrim: { on: false, strength: 1, color: '#000000' }, freeText: false } },
+        { name: 'Soft Glow', settings: { pos: 'bl', scale: 1, accent: '#0eaaf5', border: 'none', borderCustom: '#f45911', badge: 'bl', textColor: '#ffffff', outline: { on: false, width: 8, color: '#000000' }, shadow: { on: true, color: '#000000', strength: 0.7 }, scrim: { on: true, strength: 0.5, color: '#000000' }, freeText: false } },
+        { name: 'Neon Edge', settings: { pos: 'bl', scale: 1.05, accent: '#ff2d92', border: 'accent', borderCustom: '#f45911', badge: 'bl', textColor: '#00e5ff', outline: { on: true, width: 6, color: '#ff2d92' }, shadow: { on: true, color: '#000000', strength: 0.5 }, scrim: { on: true, strength: 0.4, color: '#000000' }, freeText: false } }
+      ];
+      try { if (localStorage.getItem(TPL_KEY) === null) saveTpls(STARTERS); } catch (e) {}
+      var save = document.getElementById('tplSave'), nameI = document.getElementById('tplName');
+      if (save) save.addEventListener('click', function () {
+        var arr = loadTpls(); if (arr.length >= TPL_MAX) return;
+        var nm = ((nameI && nameI.value) || '').trim().slice(0, 24) || ('Look ' + (arr.length + 1));
+        arr.push({ name: nm, settings: captureCustom() }); saveTpls(arr);
+        if (nameI) nameI.value = '';
+        renderTpls();
+      });
+      if (nameI) nameI.addEventListener('keydown', function (e) { if (e.key === 'Enter' && save) { e.preventDefault(); save.click(); } });
+      renderTpls();
+    })();
+
     function logoDefault() { return thumbStyle === 'cinematic' ? 'tl' : 'bl'; }
     function syncStyleFx() {
       var isBlocks = (thumbStyle === 'blocks');
@@ -2348,6 +2453,7 @@
       if (sb) sb.style.display = isBlocks ? 'none' : '';
       if (bb) bb.style.display = isBlocks ? '' : 'none';
       if (cc) cc.style.display = (thumbStyle === 'custom') ? '' : 'none';
+      var tc = document.getElementById('tplCustom'); if (tc) tc.style.display = (thumbStyle === 'custom') ? '' : 'none';
       if (isBlocks) {
         var ov = document.getElementById('blockOpVal'); if (ov) ov.textContent = Math.round(styleFx.blocks.opacity * 100) + '%';
         buildSwatchPick(document.getElementById('fxBlockSw'), function () { return styleFx.blocks.color; }, function (col) { styleFx.blocks.color = col; drawThumb(); });
