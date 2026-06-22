@@ -451,6 +451,14 @@
         <div class="dial" id="dZoom"><span class="dk">Zoom</span><span class="dv" id="zoomVal">1.0&times;</span></div>
         <div class="dial" id="dPosX"><span class="dk">&#8596; Across</span><span class="dv" id="posXVal">0</span></div>
         <div class="dial" id="dPosY"><span class="dk">&#8597; Up/Down</span><span class="dv" id="posYVal">0</span></div>
+        <div class="dial" id="dEdge"><span class="dk">&#8597; Edge fill</span><span class="dv" id="edgeVal">0%</span></div>
+      </div>
+      <p style="font-size:11px;font-weight:700;color:var(--text-soft);letter-spacing:.04em;text-transform:uppercase;margin:10px 0 6px">Crop edges</p>
+      <div class="dialgrid">
+        <div class="dial" id="dTrimL"><span class="dk">Left</span><span class="dv" id="trimLVal">0%</span></div>
+        <div class="dial" id="dTrimR"><span class="dk">Right</span><span class="dv" id="trimRVal">0%</span></div>
+        <div class="dial" id="dTrimT"><span class="dk">Top</span><span class="dv" id="trimTVal">0%</span></div>
+        <div class="dial" id="dTrimB"><span class="dk">Bottom</span><span class="dv" id="trimBVal">0%</span></div>
       </div>
       <p style="font-size:11px;font-weight:700;color:var(--text-soft);letter-spacing:.04em;text-transform:uppercase;margin:10px 0 6px">Color</p>
       <div class="dialgrid">
@@ -523,10 +531,10 @@
 
       <label style="margin-top:2px">Style settings</label>
       <div id="fxShadow">
-        <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-bottom:10px"><input type="checkbox" id="fxShadowOn" checked>Shadow / vignette</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-bottom:10px"><input type="checkbox" id="fxShadowOn" checked>Vignette</label>
         <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
           <div class="tt-block" style="flex:1 1 200px;min-width:0">
-            <span class="tt-label">Shadow color</span>
+            <span class="tt-label">Vignette color</span>
             <div id="fxShadowSw" class="swatchpick"></div>
           </div>
           <div class="tt-block" style="flex:0 0 auto">
@@ -538,6 +546,7 @@
           <div class="tt-block"><span class="tt-label">Angle</span><div class="dial" id="dShadowAngle" style="min-width:76px"><span class="dk">Angle</span><span class="dv" id="shadowAngleVal">0&deg;</span></div></div>
           <div class="tt-block"><span class="tt-label">Reach</span><div class="dial" id="dShadowReach" style="min-width:76px"><span class="dk">Reach</span><span class="dv" id="shadowReachVal">68%</span></div></div>
           <div class="tt-block"><span class="tt-label">Softness</span><div class="dial" id="dShadowSoft" style="min-width:76px"><span class="dk">Soft</span><span class="dv" id="shadowSoftVal">50%</span></div></div>
+          <div class="tt-block"><span class="tt-label">Position</span><div class="dial" id="dShadowPos" style="min-width:76px"><span class="dk">Position</span><span class="dv" id="shadowPosVal">0%</span></div></div>
         </div>
       </div>
       <div id="fxBlocks" style="display:none">
@@ -658,7 +667,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.69</div>
+    <div class="foot">Magic Marquee · v0.72</div>
   </div>
 
   <script>
@@ -731,6 +740,8 @@
     };
     let montserratReady = false;
     let bgScale = 1;              // background zoom (1 = cover)
+    let bgEdge = 0;               // edge fill: stretch top/bottom edges over baked-in letterbox
+    var trim = { l: 0, r: 0, t: 0, b: 0 }; // crop: fraction cut from each edge of the source
     let bgOffsetX = 0;            // background pan (canvas px)
     let bgOffsetY = 0;
     let textScale = 1;           // global text-size multiplier
@@ -1606,7 +1617,11 @@
     function drawBackground(ctx, img, W, H) {
       // Fit the frame to the canvas height: landscape/wide fills (crops the sides),
       // a portrait shows in full with side bars you can zoom into or Extend-fill.
-      var ir = img.width / img.height, baseH = H, baseW = H * ir;
+      // Crop edges first: the trimmed sub-rectangle of the source is what gets fit/drawn.
+      var iw = img.width, ih = img.height;
+      var sx = trim.l * iw, sy = trim.t * ih, sw = (1 - trim.l - trim.r) * iw, sh = (1 - trim.t - trim.b) * ih;
+      if (sw < 1) sw = 1; if (sh < 1) sh = 1;
+      var ir = sw / sh, baseH = H, baseW = H * ir;
       var dw = baseW * bgScale, dh = baseH * bgScale;
       var cx = (W - dw) / 2, cy = (H - dh) / 2;
       // Free positioning: the image's CENTER may sit anywhere within the canvas,
@@ -1616,7 +1631,17 @@
       bgOffsetX = dx - cx; bgOffsetY = dy - cy;
       // Uncovered area (a portrait's side bars, or a gap from panning) stays the
       // canvas's solid black backing — a clean letterbox/pillarbox you can Extend-fill.
-      ctx.drawImage(img, dx, dy, dw, dh);
+      if (bgEdge > 0) {
+        // Skip the top/bottom strip of the (trimmed) SOURCE and stretch the content just inside
+        // it over that strip; the central band stays 1:1 so the middle isn't warped.
+        var e = Math.min(bgEdge, 0.28), D = 0.3;
+        var yTop = Math.round(dy), yB1 = Math.round(dy + D * dh), yB2 = Math.round(dy + (1 - D) * dh), yBot = Math.round(dy + dh);
+        ctx.drawImage(img, sx, sy + e * sh, sw, (D - e) * sh, dx, yTop, dw, yB1 - yTop);
+        ctx.drawImage(img, sx, sy + D * sh, sw, (1 - 2 * D) * sh, dx, yB1, dw, yB2 - yB1);
+        ctx.drawImage(img, sx, sy + (1 - D) * sh, sw, (D - e) * sh, dx, yB2, dw, yBot - yB2);
+      } else {
+        ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+      }
     }
 
     // Unsharp-style 3x3 sharpen on the offscreen graded image. Clamped edges.
@@ -1692,10 +1717,11 @@
       var ang = (fx.angle == null ? 0 : fx.angle);          // 0deg = shadow rises from the bottom
       var extent = (fx.extent == null ? 0.68 : fx.extent);  // how far it reaches in (0..1)
       var fall = (fx.falloff == null ? 0.5 : fx.falloff);   // 0 = hard edge, 1 = very soft
+      var pos = (fx.pos == null ? 0 : fx.pos);              // slide the vignette along its angle axis
       var rad = ang * Math.PI / 180;
       var dx = Math.sin(rad), dy = Math.cos(rad);
-      var cxp = W / 2, cyp = H / 2;
       var half = (Math.abs(dx) * W + Math.abs(dy) * H) / 2;
+      var cxp = W / 2 + dx * half * pos, cyp = H / 2 + dy * half * pos;
       var g = ctx.createLinearGradient(cxp - dx * half, cyp - dy * half, cxp + dx * half, cyp + dy * half);
       var start = Math.max(0, Math.min(0.98, 1 - extent));
       var span = 1 - start;
@@ -2056,7 +2082,7 @@
       var img = new Image();
       img.onload = function () {
         thumbFrameImg = img;
-        bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; syncPosDials(); // fresh frame starts at cover
+        bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; bgEdge = 0; trim = { l: 0, r: 0, t: 0, b: 0 }; syncPosDials(); // fresh frame starts at cover
         var zv = document.getElementById('zoomVal'); if (zv) zv.textContent = '1.0\u00d7';
         rebuildGrade(true);
         drawThumb();
@@ -2246,7 +2272,7 @@
           var framed = new Image();
           framed.onload = function () {
             thumbFrameImg = framed;
-            bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; syncPosDials();
+            bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; bgEdge = 0; trim = { l: 0, r: 0, t: 0, b: 0 }; syncPosDials();
             var zv = document.getElementById('zoomVal'); if (zv) zv.textContent = '1.0\u00d7';
             rebuildGrade(true); drawThumb();
             var strip = document.getElementById('frameStrip');
@@ -2414,11 +2440,22 @@
     function syncPosDials() {
       var px = document.getElementById('posXVal'); if (px) px.textContent = posFmt(Math.max(-100, Math.min(100, bgOffsetX / 6.4)));
       var py = document.getElementById('posYVal'); if (py) py.textContent = posFmt(Math.max(-100, Math.min(100, bgOffsetY / 3.6)));
+      var ev = document.getElementById('edgeVal'); if (ev) ev.textContent = Math.round(bgEdge * 100) + '%';
+      var tl = document.getElementById('trimLVal'); if (tl) tl.textContent = Math.round(trim.l * 100) + '%';
+      var tr = document.getElementById('trimRVal'); if (tr) tr.textContent = Math.round(trim.r * 100) + '%';
+      var tt = document.getElementById('trimTVal'); if (tt) tt.textContent = Math.round(trim.t * 100) + '%';
+      var tb = document.getElementById('trimBVal'); if (tb) tb.textContent = Math.round(trim.b * 100) + '%';
     }
     var liveGrade = function () { scheduleGrade(false); }, finalGrade = function () { scheduleGrade(true); };
     makeDial('dZoom', { get: function () { return bgScale; }, set: function (v) { bgScale = v; }, min: 0.3, max: 3.5, step: 0.05, def: 1, fmt: function (v) { return v.toFixed(1) + '\u00d7'; }, onInput: liveGrade, onChange: finalGrade });
     makeDial('dPosX', { get: function () { return bgOffsetX / 6.4; }, set: function (v) { bgOffsetX = v * 6.4; }, min: -100, max: 100, step: 1, def: 0, fmt: posFmt, onInput: liveGrade, onChange: finalGrade });
     makeDial('dPosY', { get: function () { return bgOffsetY / 3.6; }, set: function (v) { bgOffsetY = v * 3.6; }, min: -100, max: 100, step: 1, def: 0, fmt: posFmt, onInput: liveGrade, onChange: finalGrade });
+    makeDial('dEdge', { get: function () { return bgEdge; }, set: function (v) { bgEdge = v; }, min: 0, max: 0.2, step: 0.005, def: 0, fmt: function (v) { return Math.round(v * 100) + '%'; }, onInput: liveGrade, onChange: finalGrade });
+    var trimFmt = function (v) { return Math.round(v * 100) + '%'; };
+    makeDial('dTrimL', { get: function () { return trim.l; }, set: function (v) { trim.l = v; }, min: 0, max: 0.4, step: 0.01, def: 0, fmt: trimFmt, onInput: liveGrade, onChange: finalGrade });
+    makeDial('dTrimR', { get: function () { return trim.r; }, set: function (v) { trim.r = v; }, min: 0, max: 0.4, step: 0.01, def: 0, fmt: trimFmt, onInput: liveGrade, onChange: finalGrade });
+    makeDial('dTrimT', { get: function () { return trim.t; }, set: function (v) { trim.t = v; }, min: 0, max: 0.4, step: 0.01, def: 0, fmt: trimFmt, onInput: liveGrade, onChange: finalGrade });
+    makeDial('dTrimB', { get: function () { return trim.b; }, set: function (v) { trim.b = v; }, min: 0, max: 0.4, step: 0.01, def: 0, fmt: trimFmt, onInput: liveGrade, onChange: finalGrade });
     makeDial('dSat', { get: function () { return grade.sat; }, set: function (v) { grade.sat = v; }, min: 0, max: 2, step: 0.05, def: 1, fmt: pct, onInput: liveGrade, onChange: finalGrade });
     makeDial('dCon', { get: function () { return grade.contrast; }, set: function (v) { grade.contrast = v; }, min: 0.5, max: 1.8, step: 0.05, def: 1, fmt: pct, onInput: liveGrade, onChange: finalGrade });
     makeDial('dBri', { get: function () { return grade.bright; }, set: function (v) { grade.bright = v; }, min: 0.5, max: 1.5, step: 0.05, def: 1, fmt: pct, onInput: liveGrade, onChange: finalGrade });
@@ -2428,13 +2465,14 @@
     makeDial('dShadowAngle', { get: function () { var f = styleFx[thumbStyle]; return (f && f.angle != null) ? f.angle : 0; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].angle = v; }, min: 0, max: 360, step: 5, def: 0, fmt: function (v) { return Math.round(v) + '\u00b0'; }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dShadowReach', { get: function () { var f = styleFx[thumbStyle]; return (f && f.extent != null) ? f.extent : 0.68; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].extent = v; }, min: 0.1, max: 1, step: 0.02, def: 0.68, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dShadowSoft', { get: function () { var f = styleFx[thumbStyle]; return (f && f.falloff != null) ? f.falloff : 0.5; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].falloff = v; }, min: 0, max: 1, step: 0.05, def: 0.5, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+    makeDial('dShadowPos', { get: function () { var f = styleFx[thumbStyle]; return (f && f.pos != null) ? f.pos : 0; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].pos = v; }, min: -1, max: 1, step: 0.02, def: 0, fmt: function (v) { return Math.round(v * 100) + '%'; }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dBlockOp', { get: function () { return styleFx.blocks.opacity; }, set: function (v) { styleFx.blocks.opacity = v; }, min: 0, max: 1, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dOutlineW', { get: function () { return customOutline.width; }, set: function (v) { customOutline.width = v; }, min: 0, max: 24, step: 1, def: 8, fmt: function (v) { return Math.round(v); }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dTextShadowStr', { get: function () { return customShadow.strength; }, set: function (v) { customShadow.strength = v; }, min: 0, max: 1, step: 0.05, def: 0.55, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
 
     // Unified reset for all image adjustments (zoom, pan, and grade).
     document.getElementById('resetGradeBtn').addEventListener('click', function () {
-      bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; syncPosDials();
+      bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; bgEdge = 0; trim = { l: 0, r: 0, t: 0, b: 0 }; syncPosDials();
       grade = { sat: 1, contrast: 1, bright: 1, sharp: 0 };
       cbState = { shadows: { x: 0, y: 0, l: 0 }, mids: { x: 0, y: 0, l: 0 }, highs: { x: 0, y: 0, l: 0 }, offset: { x: 0, y: 0, l: 0 } }; cbSyncHandle();
       gradeReadout(); scheduleGrade(true);
@@ -2589,7 +2627,7 @@
         textColor: customTextColor,
         outline: { on: customOutline.on, width: customOutline.width, color: customOutline.color },
         shadow: { on: customShadow.on, color: customShadow.color, strength: customShadow.strength },
-        scrim: { on: sc.on, strength: sc.strength, color: sc.color, angle: (sc.angle == null ? 0 : sc.angle), extent: (sc.extent == null ? 0.68 : sc.extent), falloff: (sc.falloff == null ? 0.5 : sc.falloff) },
+        scrim: { on: sc.on, strength: sc.strength, color: sc.color, angle: (sc.angle == null ? 0 : sc.angle), extent: (sc.extent == null ? 0.68 : sc.extent), falloff: (sc.falloff == null ? 0.5 : sc.falloff), pos: (sc.pos == null ? 0 : sc.pos) },
         case: customCase,
         freeText: freeText
       };
@@ -2606,6 +2644,7 @@
       setDV('dShadowAngle', Math.round(styleFx.custom && styleFx.custom.angle != null ? styleFx.custom.angle : 0) + '\u00b0');
       setDV('dShadowReach', Math.round((styleFx.custom && styleFx.custom.extent != null ? styleFx.custom.extent : 0.68) * 100) + '%');
       setDV('dShadowSoft', Math.round((styleFx.custom && styleFx.custom.falloff != null ? styleFx.custom.falloff : 0.5) * 100) + '%');
+      setDV('dShadowPos', Math.round((styleFx.custom && styleFx.custom.pos != null ? styleFx.custom.pos : 0) * 100) + '%');
       setDV('dSize', Math.round(textScale * 100) + '%');
       if (document.getElementById('fxTextSw')) buildSwatchPick(document.getElementById('fxTextSw'), function () { return customTextColor; }, function (c) { customTextColor = c; drawThumb(); });
       if (document.getElementById('fxOutlineSw')) buildSwatchPick(document.getElementById('fxOutlineSw'), function () { return customOutline.color; }, function (c) { customOutline.color = c; drawThumb(); });
@@ -2634,7 +2673,7 @@
       if (s.textColor) customTextColor = s.textColor;
       if (s.outline) customOutline = { on: !!s.outline.on, width: (s.outline.width != null ? s.outline.width : 8), color: s.outline.color || '#000000' };
       if (s.shadow) customShadow = { on: !!s.shadow.on, color: s.shadow.color || '#000000', strength: (s.shadow.strength != null ? s.shadow.strength : 0.55) };
-      if (s.scrim) styleFx.custom = { on: !!s.scrim.on, strength: (s.scrim.strength != null ? s.scrim.strength : 1), color: s.scrim.color || '#000000', angle: (s.scrim.angle == null ? 0 : s.scrim.angle), extent: (s.scrim.extent == null ? 0.68 : s.scrim.extent), falloff: (s.scrim.falloff == null ? 0.5 : s.scrim.falloff) };
+      if (s.scrim) styleFx.custom = { on: !!s.scrim.on, strength: (s.scrim.strength != null ? s.scrim.strength : 1), color: s.scrim.color || '#000000', angle: (s.scrim.angle == null ? 0 : s.scrim.angle), extent: (s.scrim.extent == null ? 0.68 : s.scrim.extent), falloff: (s.scrim.falloff == null ? 0.5 : s.scrim.falloff), pos: (s.scrim.pos == null ? 0 : s.scrim.pos) };
       if (typeof s.freeText === 'boolean') freeText = s.freeText;
       customCase = s.case || 'none';
     }
@@ -2755,6 +2794,7 @@
         var av = document.getElementById('shadowAngleVal'); if (av) av.textContent = Math.round(fx.angle == null ? 0 : fx.angle) + '\u00b0';
         var rv = document.getElementById('shadowReachVal'); if (rv) rv.textContent = Math.round((fx.extent == null ? 0.68 : fx.extent) * 100) + '%';
         var fv = document.getElementById('shadowSoftVal'); if (fv) fv.textContent = Math.round((fx.falloff == null ? 0.5 : fx.falloff) * 100) + '%';
+        var pv = document.getElementById('shadowPosVal'); if (pv) pv.textContent = Math.round((fx.pos == null ? 0 : fx.pos) * 100) + '%';
         buildSwatchPick(document.getElementById('fxShadowSw'), function () { return styleFx[thumbStyle].color; }, function (col) { styleFx[thumbStyle].color = col; drawThumb(); });
       }
     }
