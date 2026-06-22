@@ -260,6 +260,8 @@
     .swatch-any { width:28px; height:28px; border-radius:50%; position:relative; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; background:conic-gradient(from 0deg, #ff453a, #ff9f0a, #ffd60a, #30d158, #00e5ff, #0eaaf5, #7c4dff, #ff2d92, #ff453a); }
     .swatch-any input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; border:0; padding:0; }
     .swatch-any span { color:#fff; font-weight:700; font-size:15px; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.7); pointer-events:none; }
+    #styleToggle button.justunlocked { animation:segpop .4s ease; }
+    @keyframes segpop { 0% { transform:scale(.8); opacity:0; } 100% { transform:scale(1); opacity:1; } }
 </style>
 </head>
 <body>
@@ -388,12 +390,13 @@
     <div id="thumbnailView" class="panel" style="display:none">
       <div id="thumbPlaceholder" class="card placeholder"><div class="ph169"><span class="ph169-cap">16:9 preview</span></div><p class="ph-hint">Head to <b>Publish</b>, send a film, then tap <b>Make thumbnail</b> — your studio opens here.</p></div>
       <div id="thumbCard" class="card" style="display:none">
-      <label style="font-size:15px; color:var(--text); margin-bottom:12px">Thumbnail</label>
+      <label id="thumbHeading" style="font-size:15px; color:var(--text); margin-bottom:12px; cursor:pointer; user-select:none; -webkit-user-select:none">Thumbnail</label>
       <div id="styleToggle" class="segmented">
         <button type="button" data-style="cinematic" class="sel">Cinematic</button>
         <button type="button" data-style="spotlight">Spotlight</button>
         <button type="button" data-style="sidebar">Sidebar</button>
         <button type="button" data-style="blocks">Blocks</button>
+        <button type="button" data-style="custom" id="styleCustomBtn" style="display:none">Custom</button>
       </div>
       <label>Border</label>
       <div id="borderToggle" class="segmented">
@@ -572,7 +575,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.56</div>
+    <div class="foot">Magic Marquee · v0.57</div>
   </div>
 
   <script>
@@ -640,7 +643,8 @@
       cinematic: { on: true, strength: 1, color: '#000000' },
       spotlight: { on: true, strength: 1, color: '#000000' },
       sidebar:   { on: true, strength: 1, color: '#0a0a0d' },
-      blocks:    { color: '#000000', opacity: 1 }
+      blocks:    { color: '#000000', opacity: 1 },
+      custom:    { on: false, strength: 1, color: '#000000' }
     };
     let montserratReady = false;
     let bgScale = 1;              // background zoom (1 = cover)
@@ -1512,7 +1516,7 @@
 
     // CINEMATIC style: dark gradient rising from the bottom for legibility.
     function drawScrim(ctx, W, H) {
-      var fx = styleFx.cinematic; if (!fx.on) return;
+      var fx = styleFx[thumbStyle] || styleFx.cinematic; if (!fx || !fx.on) return;
       var k = fx.strength, c = fx.color;
       var g = ctx.createLinearGradient(0, H * 0.32, 0, H);
       g.addColorStop(0, hexToRgba(c, 0));
@@ -1664,6 +1668,10 @@
         drawBadge(ctx, 1280, 720, badgeCorner || 'bl', true);
       } else if (thumbStyle === 'sidebar') {
         if (!overlayHidden) { drawSidebarPanel(ctx, 1280, 720); drawOverlaySidebar(ctx, 1280, 720); }
+        drawBorder(ctx, 1280, 720, true);
+        drawBadge(ctx, 1280, 720, badgeCorner || 'bl', true);
+      } else if (thumbStyle === 'custom') {
+        if (!overlayHidden) { drawScrim(ctx, 1280, 720); drawOverlayClean(ctx, 1280, 720); }
         drawBorder(ctx, 1280, 720, true);
         drawBadge(ctx, 1280, 720, badgeCorner || 'bl', true);
       } else {
@@ -2231,7 +2239,7 @@
           thumbStyle = btn.getAttribute('data-style');
           Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { b.classList.remove('sel'); });
           btn.classList.add('sel');
-          var defPos = { cinematic: 'bl', spotlight: 'mc', sidebar: 'ml', blocks: 'tr' };
+          var defPos = { cinematic: 'bl', spotlight: 'mc', sidebar: 'ml', blocks: 'tr', custom: 'bl' };
           thumbPos = defPos[thumbStyle] || 'bl'; // sensible default per style
           buildPosGrid();
           syncLogoGrid();
@@ -2239,6 +2247,33 @@
           drawThumb();
         });
       });
+    })();
+
+    // Expert "Custom" style: a clean slate, hidden until unlocked. Triple-tap the
+    // heading to reveal it; the unlock sticks on this device.
+    (function () {
+      var btn = document.getElementById('styleCustomBtn');
+      var head = document.getElementById('thumbHeading');
+      if (!btn) return;
+      function reveal() {
+        btn.style.display = '';
+        btn.classList.add('justunlocked');
+        setTimeout(function () { btn.classList.remove('justunlocked'); }, 600);
+      }
+      try { if (localStorage.getItem('mp_customunlock') === '1') btn.style.display = ''; } catch (e) {}
+      if (head) {
+        var taps = 0, last = 0;
+        head.addEventListener('click', function () {
+          var now = Date.now();
+          taps = (now - last < 700) ? taps + 1 : 1;
+          last = now;
+          if (taps >= 3) {
+            taps = 0;
+            try { localStorage.setItem('mp_customunlock', '1'); } catch (e) {}
+            reveal();
+          }
+        });
+      }
     })();
 
     function logoDefault() { return thumbStyle === 'cinematic' ? 'tl' : 'bl'; }
