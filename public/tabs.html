@@ -171,7 +171,7 @@
     .sec.collapsed .chev { transform:rotate(-90deg); }
     .sec.collapsed .secbody { display:none; }
     .enhancepanel { background:var(--field); border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:14px; }
-    .enhrow { display:grid; grid-template-columns:repeat(auto-fit, minmax(116px, 1fr)); gap:8px; margin-bottom:10px; }
+    .enhrow { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; margin-bottom:10px; }
     .enhopt { width:auto; background:var(--chip); color:var(--text); font-size:13px; font-weight:600; padding:10px 8px; border:1px solid var(--border); border-radius:9px; }
     .enhopt:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
     .enhancepanel input[type=text] { margin-bottom:0; }
@@ -214,6 +214,9 @@
     .tt-label { font-size:11px; font-weight:700; color:var(--text-soft); letter-spacing:.04em; text-transform:uppercase; }
     .texttools .swatches { grid-template-columns:repeat(4,30px); margin-bottom:0; }
     .texttools .posgrid { margin-bottom:0; }
+    .logogrid { display:grid; grid-template-columns:repeat(2,40px); gap:6px; margin-bottom:18px; }
+    .logogrid button { width:40px; height:40px; background:var(--chip); color:var(--text-soft); padding:0; border-radius:8px; font-size:16px; line-height:1; }
+    .logogrid button.sel { background:var(--accent); color:#fff; }
     .texttools .dial { min-width:60px; }
     /* ---- v0.51: row-style options, template drawers, 16:9 placeholder ---- */
     .optcard { padding-top:16px; }
@@ -410,10 +413,10 @@
         <div class="lblq" style="margin-bottom:8px"><label>AI image options</label><button type="button" class="tipbtn" data-tip="tipEnhance" aria-label="What do these do?" aria-expanded="false">?</button></div>
         <div id="tipEnhance" class="tip" style="margin-top:0"><p><b>Touch up shot</b> — polishes the frame you already have: cleans it up and improves the look while keeping the same shot.</p><p><b>Replace background</b> — keeps your subject and swaps what's behind them. Describe the new background in the box.</p><p><b>Generate background</b> — makes a brand-new background from your description (no frame needed).</p><p><b>Extend background</b> — fills the empty side bars (from a portrait or a reframed shot) with AI, keeping your subject and framing exactly as-is.</p><p>Write the look you want in plain words — colors, lighting, mood. Don't name brands, movies, shows, or characters; OpenAI blocks those.</p></div>
         <div class="enhrow">
-          <button type="button" class="enhopt" data-mode="touchup">Touch up</button>
-          <button type="button" class="enhopt" data-mode="replacebg">Replace bg</button>
-          <button type="button" class="enhopt" data-mode="genbg">Generate bg</button>
-          <button type="button" class="enhopt" data-mode="extendbg">Extend bg</button>
+          <button type="button" class="enhopt" data-mode="touchup">Touch up shot</button>
+          <button type="button" class="enhopt" data-mode="replacebg">Replace background</button>
+          <button type="button" class="enhopt" data-mode="genbg">Generate background</button>
+          <button type="button" class="enhopt" data-mode="extendbg">Extend background</button>
         </div>
         <input type="text" id="enhancePrompt" placeholder="Optional: describe the look or background">
         <p class="hint" id="enhanceCost" style="margin:0 0 4px">Uses your OpenAI key · a few cents per image · ~15–45s.</p>
@@ -460,6 +463,14 @@
           <span class="tt-label">Size</span>
           <div class="dial" id="dSize" style="min-width:60px"><span class="dk">Size</span><span class="dv" id="sizeVal">100%</span></div>
         </div>
+      </div>
+
+      <label style="margin-top:2px">Logo corner</label>
+      <div id="logoGrid" class="logogrid">
+        <button type="button" data-c="tl" aria-label="Top left">&#8598;</button>
+        <button type="button" data-c="tr" aria-label="Top right">&#8599;</button>
+        <button type="button" data-c="bl" aria-label="Bottom left">&#8601;</button>
+        <button type="button" data-c="br" aria-label="Bottom right">&#8600;</button>
       </div>
 
       <button id="setThumbBtn" disabled>Set as YouTube thumbnail</button>
@@ -539,7 +550,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.53</div>
+    <div class="foot">Magic Marquee · v0.54</div>
   </div>
 
   <script>
@@ -601,6 +612,7 @@
     let thumbFrameImg = null;     // current background Image
     let thumbPos = 'bl';          // text anchor: [t/m/b][l/c/r]
     let thumbStyle = 'cinematic'; // 'cinematic' (scrim + big bottom text) | 'blocks'
+    let badgeCorner = ''; // '' = per-style default; else tl/tr/bl/br (user override)
     let montserratReady = false;
     let bgScale = 1;              // background zoom (1 = cover)
     let bgOffsetX = 0;            // background pan (canvas px)
@@ -1520,7 +1532,8 @@
       ctx.font = '800 ' + nameFs + 'px Montserrat, sans-serif'; ctx.textBaseline = 'alphabetic';
       var nameW = Math.max(ctx.measureText('ISAIAH').width, ctx.measureText('JEREMIAH').width);
       var pillW = pad + avD + 12 + nameW + pad + 4;
-      var x0 = M, y0 = (corner === 'tl') ? M : (H - M - pillH);
+      var x0 = (corner === 'tr' || corner === 'br') ? (W - M - pillW) : M;
+      var y0 = (corner === 'tl' || corner === 'tr') ? M : (H - M - pillH);
       roundRectPath(ctx, x0, y0, pillW, pillH, 16);
       ctx.fillStyle = subtle ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.72)'; ctx.fill();
       if (avatarReady) {
@@ -1611,19 +1624,19 @@
       if (thumbStyle === 'cinematic') {
         if (!overlayHidden) { drawScrim(ctx, 1280, 720); drawOverlayClean(ctx, 1280, 720); }
         drawBorder(ctx, 1280, 720, true);
-        drawBadge(ctx, 1280, 720, 'tl', true);
+        drawBadge(ctx, 1280, 720, badgeCorner || 'tl', true);
       } else if (thumbStyle === 'spotlight') {
         if (!overlayHidden) { drawSpotlight(ctx, 1280, 720); drawOverlaySpotlight(ctx, 1280, 720); }
         drawBorder(ctx, 1280, 720, true);
-        drawBadge(ctx, 1280, 720, 'bl', true);
+        drawBadge(ctx, 1280, 720, badgeCorner || 'bl', true);
       } else if (thumbStyle === 'sidebar') {
         if (!overlayHidden) { drawSidebarPanel(ctx, 1280, 720); drawOverlaySidebar(ctx, 1280, 720); }
         drawBorder(ctx, 1280, 720, true);
-        drawBadge(ctx, 1280, 720, 'bl', true);
+        drawBadge(ctx, 1280, 720, badgeCorner || 'bl', true);
       } else {
         if (!overlayHidden) drawOverlayBlocks(ctx, 1280, 720);
         drawBorder(ctx, 1280, 720, false);
-        drawBadge(ctx, 1280, 720, 'bl', false);
+        drawBadge(ctx, 1280, 720, badgeCorner || 'bl', false);
       }
     }
 
@@ -2159,9 +2172,29 @@
           var defPos = { cinematic: 'bl', spotlight: 'mc', sidebar: 'ml', blocks: 'tr' };
           thumbPos = defPos[thumbStyle] || 'bl'; // sensible default per style
           buildPosGrid();
+          syncLogoGrid();
           drawThumb();
         });
       });
+    })();
+
+    function logoDefault() { return thumbStyle === 'cinematic' ? 'tl' : 'bl'; }
+    function syncLogoGrid() {
+      var g = document.getElementById('logoGrid'); if (!g) return;
+      var eff = badgeCorner || logoDefault();
+      Array.prototype.forEach.call(g.querySelectorAll('button'), function (b) {
+        b.classList.toggle('sel', b.getAttribute('data-c') === eff);
+      });
+    }
+    (function () {
+      var g = document.getElementById('logoGrid'); if (!g) return;
+      Array.prototype.forEach.call(g.querySelectorAll('button'), function (b) {
+        b.addEventListener('click', function () {
+          badgeCorner = b.getAttribute('data-c');
+          syncLogoGrid(); drawThumb();
+        });
+      });
+      syncLogoGrid();
     })();
 
     (function () {
