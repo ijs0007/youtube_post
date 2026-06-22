@@ -452,6 +452,8 @@
         <div class="dial" id="dPosX"><span class="dk">&#8596; Across</span><span class="dv" id="posXVal">0</span></div>
         <div class="dial" id="dPosY"><span class="dk">&#8597; Up/Down</span><span class="dv" id="posYVal">0</span></div>
         <div class="dial" id="dEdge"><span class="dk">&#8597; Edge fill</span><span class="dv" id="edgeVal">0%</span></div>
+        <div class="dial" id="dEdgeH"><span class="dk">&#8596; Edge fill</span><span class="dv" id="edgeHVal">0%</span></div>
+        <div class="dial" id="dBlend"><span class="dk">Edge blend</span><span class="dv" id="blendVal">30%</span></div>
       </div>
       <p style="font-size:11px;font-weight:700;color:var(--text-soft);letter-spacing:.04em;text-transform:uppercase;margin:10px 0 6px">Crop edges</p>
       <div class="dialgrid">
@@ -667,7 +669,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.72</div>
+    <div class="foot">Magic Marquee · v0.73</div>
   </div>
 
   <script>
@@ -740,8 +742,10 @@
     };
     let montserratReady = false;
     let bgScale = 1;              // background zoom (1 = cover)
-    let bgEdge = 0;               // edge fill: stretch top/bottom edges over baked-in letterbox
-    var trim = { l: 0, r: 0, t: 0, b: 0 }; // crop: fraction cut from each edge of the source
+    let bgEdge = 0;               // edge fill, vertical (top/bottom)
+    let bgEdgeH = 0;             // edge fill, horizontal (left/right)
+    var bgBlend = 0.3;           // edge-fill blend: how deep the stretch reaches (keep-band)
+    var trim = { l: 0, r: 0, t: 0, b: 0 }; // crop matte: black bar over each edge, image stays put
     let bgOffsetX = 0;            // background pan (canvas px)
     let bgOffsetY = 0;
     let textScale = 1;           // global text-size multiplier
@@ -1617,11 +1621,8 @@
     function drawBackground(ctx, img, W, H) {
       // Fit the frame to the canvas height: landscape/wide fills (crops the sides),
       // a portrait shows in full with side bars you can zoom into or Extend-fill.
-      // Crop edges first: the trimmed sub-rectangle of the source is what gets fit/drawn.
       var iw = img.width, ih = img.height;
-      var sx = trim.l * iw, sy = trim.t * ih, sw = (1 - trim.l - trim.r) * iw, sh = (1 - trim.t - trim.b) * ih;
-      if (sw < 1) sw = 1; if (sh < 1) sh = 1;
-      var ir = sw / sh, baseH = H, baseW = H * ir;
+      var ir = iw / ih, baseH = H, baseW = H * ir;
       var dw = baseW * bgScale, dh = baseH * bgScale;
       var cx = (W - dw) / 2, cy = (H - dh) / 2;
       // Free positioning: the image's CENTER may sit anywhere within the canvas,
@@ -1629,18 +1630,22 @@
       var dx = Math.max(-dw / 2, Math.min(W - dw / 2, cx + bgOffsetX));
       var dy = Math.max(-dh / 2, Math.min(H - dh / 2, cy + bgOffsetY));
       bgOffsetX = dx - cx; bgOffsetY = dy - cy;
-      // Uncovered area (a portrait's side bars, or a gap from panning) stays the
-      // canvas's solid black backing — a clean letterbox/pillarbox you can Extend-fill.
-      if (bgEdge > 0) {
-        // Skip the top/bottom strip of the (trimmed) SOURCE and stretch the content just inside
-        // it over that strip; the central band stays 1:1 so the middle isn't warped.
-        var e = Math.min(bgEdge, 0.28), D = 0.3;
-        var yTop = Math.round(dy), yB1 = Math.round(dy + D * dh), yB2 = Math.round(dy + (1 - D) * dh), yBot = Math.round(dy + dh);
-        ctx.drawImage(img, sx, sy + e * sh, sw, (D - e) * sh, dx, yTop, dw, yB1 - yTop);
-        ctx.drawImage(img, sx, sy + D * sh, sw, (1 - 2 * D) * sh, dx, yB1, dw, yB2 - yB1);
-        ctx.drawImage(img, sx, sy + (1 - D) * sh, sw, (D - e) * sh, dx, yB2, dw, yBot - yB2);
+      if (bgEdge > 0 || bgEdgeH > 0) {
+        // Edge fill: skip a strip at each filled edge of the SOURCE and stretch the content just
+        // inside it over the strip; a central band stays 1:1 so the middle isn't warped. Blend sets
+        // how deep the stretch reaches (gentler when deeper). Either/both axes (a 9-slice).
+        var D = Math.max(0.18, Math.min(0.45, bgBlend));
+        var eV = Math.min(bgEdge, D - 0.02), eH = Math.min(bgEdgeH, D - 0.02);
+        var fx = [eH, D, 1 - D, 1 - eH], fy = [eV, D, 1 - D, 1 - eV];
+        var DX = [Math.round(dx), Math.round(dx + D * dw), Math.round(dx + (1 - D) * dw), Math.round(dx + dw)];
+        var DY = [Math.round(dy), Math.round(dy + D * dh), Math.round(dy + (1 - D) * dh), Math.round(dy + dh)];
+        for (var r = 0; r < 3; r++) {
+          for (var col = 0; col < 3; col++) {
+            ctx.drawImage(img, fx[col] * iw, fy[r] * ih, (fx[col + 1] - fx[col]) * iw, (fy[r + 1] - fy[r]) * ih, DX[col], DY[r], DX[col + 1] - DX[col], DY[r + 1] - DY[r]);
+          }
+        }
       } else {
-        ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+        ctx.drawImage(img, dx, dy, dw, dh);
       }
     }
 
@@ -1884,6 +1889,14 @@
         if (!gradeReady) rebuildGrade(true);
         ctx.drawImage(gradeCanvas, 0, 0);
       } else { ctx.fillStyle = '#0d0d10'; ctx.fillRect(0, 0, 1280, 720); }
+      if (trim.l > 0 || trim.r > 0 || trim.t > 0 || trim.b > 0) {
+        // Crop: paint black over the trimmed edges; the image underneath stays exactly put.
+        ctx.fillStyle = '#000';
+        if (trim.t > 0) ctx.fillRect(0, 0, 1280, trim.t * 720);
+        if (trim.b > 0) ctx.fillRect(0, 720 - trim.b * 720, 1280, trim.b * 720);
+        if (trim.l > 0) ctx.fillRect(0, 0, trim.l * 1280, 720);
+        if (trim.r > 0) ctx.fillRect(1280 - trim.r * 1280, 0, trim.r * 1280, 720);
+      }
       if (thumbStyle === 'cinematic') {
         drawScrim(ctx, 1280, 720); if (!overlayHidden) drawOverlayClean(ctx, 1280, 720);
         drawBorder(ctx, 1280, 720, true);
@@ -2082,7 +2095,7 @@
       var img = new Image();
       img.onload = function () {
         thumbFrameImg = img;
-        bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; bgEdge = 0; trim = { l: 0, r: 0, t: 0, b: 0 }; syncPosDials(); // fresh frame starts at cover
+        bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; bgEdge = 0; bgEdgeH = 0; bgBlend = 0.3; trim = { l: 0, r: 0, t: 0, b: 0 }; syncPosDials(); // fresh frame starts at cover
         var zv = document.getElementById('zoomVal'); if (zv) zv.textContent = '1.0\u00d7';
         rebuildGrade(true);
         drawThumb();
@@ -2272,7 +2285,7 @@
           var framed = new Image();
           framed.onload = function () {
             thumbFrameImg = framed;
-            bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; bgEdge = 0; trim = { l: 0, r: 0, t: 0, b: 0 }; syncPosDials();
+            bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; bgEdge = 0; bgEdgeH = 0; bgBlend = 0.3; trim = { l: 0, r: 0, t: 0, b: 0 }; syncPosDials();
             var zv = document.getElementById('zoomVal'); if (zv) zv.textContent = '1.0\u00d7';
             rebuildGrade(true); drawThumb();
             var strip = document.getElementById('frameStrip');
@@ -2441,6 +2454,8 @@
       var px = document.getElementById('posXVal'); if (px) px.textContent = posFmt(Math.max(-100, Math.min(100, bgOffsetX / 6.4)));
       var py = document.getElementById('posYVal'); if (py) py.textContent = posFmt(Math.max(-100, Math.min(100, bgOffsetY / 3.6)));
       var ev = document.getElementById('edgeVal'); if (ev) ev.textContent = Math.round(bgEdge * 100) + '%';
+      var eh = document.getElementById('edgeHVal'); if (eh) eh.textContent = Math.round(bgEdgeH * 100) + '%';
+      var bl = document.getElementById('blendVal'); if (bl) bl.textContent = Math.round(bgBlend * 100) + '%';
       var tl = document.getElementById('trimLVal'); if (tl) tl.textContent = Math.round(trim.l * 100) + '%';
       var tr = document.getElementById('trimRVal'); if (tr) tr.textContent = Math.round(trim.r * 100) + '%';
       var tt = document.getElementById('trimTVal'); if (tt) tt.textContent = Math.round(trim.t * 100) + '%';
@@ -2451,6 +2466,8 @@
     makeDial('dPosX', { get: function () { return bgOffsetX / 6.4; }, set: function (v) { bgOffsetX = v * 6.4; }, min: -100, max: 100, step: 1, def: 0, fmt: posFmt, onInput: liveGrade, onChange: finalGrade });
     makeDial('dPosY', { get: function () { return bgOffsetY / 3.6; }, set: function (v) { bgOffsetY = v * 3.6; }, min: -100, max: 100, step: 1, def: 0, fmt: posFmt, onInput: liveGrade, onChange: finalGrade });
     makeDial('dEdge', { get: function () { return bgEdge; }, set: function (v) { bgEdge = v; }, min: 0, max: 0.2, step: 0.005, def: 0, fmt: function (v) { return Math.round(v * 100) + '%'; }, onInput: liveGrade, onChange: finalGrade });
+    makeDial('dEdgeH', { get: function () { return bgEdgeH; }, set: function (v) { bgEdgeH = v; }, min: 0, max: 0.2, step: 0.005, def: 0, fmt: function (v) { return Math.round(v * 100) + '%'; }, onInput: liveGrade, onChange: finalGrade });
+    makeDial('dBlend', { get: function () { return bgBlend; }, set: function (v) { bgBlend = v; }, min: 0.18, max: 0.45, step: 0.01, def: 0.3, fmt: function (v) { return Math.round(v * 100) + '%'; }, onInput: liveGrade, onChange: finalGrade });
     var trimFmt = function (v) { return Math.round(v * 100) + '%'; };
     makeDial('dTrimL', { get: function () { return trim.l; }, set: function (v) { trim.l = v; }, min: 0, max: 0.4, step: 0.01, def: 0, fmt: trimFmt, onInput: liveGrade, onChange: finalGrade });
     makeDial('dTrimR', { get: function () { return trim.r; }, set: function (v) { trim.r = v; }, min: 0, max: 0.4, step: 0.01, def: 0, fmt: trimFmt, onInput: liveGrade, onChange: finalGrade });
@@ -2472,7 +2489,7 @@
 
     // Unified reset for all image adjustments (zoom, pan, and grade).
     document.getElementById('resetGradeBtn').addEventListener('click', function () {
-      bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; bgEdge = 0; trim = { l: 0, r: 0, t: 0, b: 0 }; syncPosDials();
+      bgScale = 1; bgOffsetX = 0; bgOffsetY = 0; bgEdge = 0; bgEdgeH = 0; bgBlend = 0.3; trim = { l: 0, r: 0, t: 0, b: 0 }; syncPosDials();
       grade = { sat: 1, contrast: 1, bright: 1, sharp: 0 };
       cbState = { shadows: { x: 0, y: 0, l: 0 }, mids: { x: 0, y: 0, l: 0 }, highs: { x: 0, y: 0, l: 0 }, offset: { x: 0, y: 0, l: 0 } }; cbSyncHandle();
       gradeReadout(); scheduleGrade(true);
