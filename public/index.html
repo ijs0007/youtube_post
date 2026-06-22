@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <title>Magic Premiere</title>
+  <title>Magic Marquee</title>
   <style>
     :root {
       --bg:#faf9f5; --surface:#ffffff; --field:#ffffff; --chip:#f0eee8;
@@ -187,7 +187,7 @@
     .btnrow { display:flex; align-items:center; gap:8px; }
     .btnrow > button.secondary { flex:1 1 auto; width:auto; }
   
-    /* ---- Magic Premiere brand + theme/accent controls (ported from MSM) ---- */
+    /* ---- Magic Marquee brand + theme/accent controls (ported from MSM) ---- */
     .brand { display:flex; align-items:center; gap:9px; font-family:"Poppins","Segoe UI",-apple-system,sans-serif; font-weight:700; font-size:21px; letter-spacing:-.01em; }
     .brand .star { font-size:18px; color:var(--title-g2, var(--accent)); }
     .brand .wm { background:linear-gradient(92deg, var(--title-g1,#5fa0ff), var(--title-g2,#2f80ff) 55%, var(--title-g3,#4fc3f7)); -webkit-background-clip:text; background-clip:text; color:transparent; }
@@ -207,7 +207,7 @@
   <div class="wrap">
     <div id="topBusy" class="topbusy" aria-live="polite"><span class="topbusy-spin"></span><span id="topBusyLabel">Working…</span><span id="topBusyPct" class="topbusy-pct"></span></div>
     <div class="hrow">
-      <div class="brand"><span class="star">✦</span><span class="wm">Magic Premiere</span></div>
+      <div class="brand"><span class="star">✦</span><span class="wm">Magic Marquee</span></div>
       <div class="hbtns">
         <button id="helpBtn" class="theme-toggle" type="button" title="How it works" aria-label="How it works">?</button>
         <button id="accentBtn" class="theme-toggle" type="button" title="Accent color" aria-label="Accent color">🎨</button>
@@ -347,10 +347,14 @@
       </div>
 
       <label>Image adjustments</label>
+      <p style="font-size:11px;font-weight:700;color:var(--text-soft);letter-spacing:.04em;text-transform:uppercase;margin:0 0 6px">Position &amp; zoom</p>
       <div class="dialgrid">
         <div class="dial" id="dZoom"><span class="dk">Zoom</span><span class="dv" id="zoomVal">1.0&times;</span></div>
         <div class="dial" id="dPosX"><span class="dk">&#8596; Across</span><span class="dv" id="posXVal">0</span></div>
         <div class="dial" id="dPosY"><span class="dk">&#8597; Up/Down</span><span class="dv" id="posYVal">0</span></div>
+      </div>
+      <p style="font-size:11px;font-weight:700;color:var(--text-soft);letter-spacing:.04em;text-transform:uppercase;margin:10px 0 6px">Color</p>
+      <div class="dialgrid">
         <div class="dial" id="dSat"><span class="dk">Saturation</span><span class="dv" id="satVal">100%</span></div>
         <div class="dial" id="dCon"><span class="dk">Contrast</span><span class="dv" id="conVal">100%</span></div>
         <div class="dial" id="dBri"><span class="dk">Brightness</span><span class="dv" id="briVal">100%</span></div>
@@ -362,7 +366,7 @@
       <label>Video title</label>
       <div class="lblrow"><span id="thumbTitleView" class="titleview">—</span><button id="newTitleBtn" class="ghostbtn" type="button">↻ New</button></div>
 
-      <div class="lblrow"><label for="overlayText" style="margin:0">On-screen text — one line per row</label><span style="display:flex;gap:8px"><button id="toggleTextBtn" class="ghostbtn" type="button" title="Hide text" aria-label="Hide text"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:-2px"><path d="M1 8s2.6-4.6 7-4.6S15 8 15 8s-2.6 4.6-7 4.6S1 8 1 8z"/><circle cx="8" cy="8" r="2"/><line class="eyeslash" x1="2" y1="2" x2="14" y2="14"/></svg></button><button id="newTextBtn" class="ghostbtn" type="button">↻ New</button></span></div>
+      <div class="lblrow"><label for="overlayText" style="margin:0">Headline (on-screen text) — one line per row</label><span style="display:flex;gap:8px"><button id="toggleTextBtn" class="ghostbtn" type="button" title="Hide text" aria-label="Hide text"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:-2px"><path d="M1 8s2.6-4.6 7-4.6S15 8 15 8s-2.6 4.6-7 4.6S1 8 1 8z"/><circle cx="8" cy="8" r="2"/><line class="eyeslash" x1="2" y1="2" x2="14" y2="14"/></svg></button><button id="newTextBtn" class="ghostbtn" type="button">↻ New</button></span></div>
       <textarea id="overlayText" style="min-height:84px" placeholder="The punchy text on the thumbnail"></textarea>
 
       <label>Tap a word to color it · hold &amp; drag to resize</label>
@@ -398,7 +402,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Premiere · v0.48</div>
+    <div class="foot">Magic Marquee · v0.49</div>
   </div>
 
   <script>
@@ -2095,6 +2099,7 @@
       var v = document.getElementById('thumbTitleView');
       if (v) v.textContent = (titleInput.value || '').trim() || '\u2014';
     }
+    titleInput.addEventListener('input', setThumbTitleView);
     function frameStripLoading(msg) {
       var strip = document.getElementById('frameStrip');
       if (strip) strip.innerHTML = '<div class="framespin"><span class="sp"></span>' + (msg || 'Grabbing frames...') + '</div>';
