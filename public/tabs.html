@@ -253,6 +253,13 @@
     .tab.working.indet .tabring-arc { stroke-dasharray:14 42; stroke-dashoffset:0; transition:none; }
     .tab.done .tabring-arc { stroke:var(--good); }
     @keyframes tabspin { to { transform:rotate(360deg); } }
+    /* ---- v0.55: custom color palette (border; per-style colors reuse it) ---- */
+    .swatchpick { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .swatchpick button { width:28px; height:28px; border-radius:50%; padding:0; border:2px solid transparent; cursor:pointer; }
+    .swatchpick button.sel { border-color:#fff; box-shadow:0 0 0 2px var(--bg); }
+    .swatch-any { width:28px; height:28px; border-radius:50%; position:relative; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; overflow:hidden; background:conic-gradient(from 0deg, #ff453a, #ff9f0a, #ffd60a, #30d158, #00e5ff, #0eaaf5, #7c4dff, #ff2d92, #ff453a); }
+    .swatch-any input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; border:0; padding:0; }
+    .swatch-any span { color:#fff; font-weight:700; font-size:15px; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.7); pointer-events:none; }
 </style>
 </head>
 <body>
@@ -391,11 +398,11 @@
       <label>Border</label>
       <div id="borderToggle" class="segmented">
         <button type="button" data-border="brand" class="sel">Brand</button>
-        <button type="button" data-border="white">White</button>
-        <button type="button" data-border="black">Black</button>
         <button type="button" data-border="accent">Accent</button>
+        <button type="button" data-border="custom">Custom</button>
         <button type="button" data-border="none">None</button>
       </div>
+      <div id="borderCustomRow" class="swatchpick" style="display:none; margin-top:10px"></div>
       <div class="thumbsticky"><canvas id="thumbCanvas" width="1280" height="720"></canvas></div>
       <p class="genstatus" id="thumbStatus"></p>
 
@@ -471,6 +478,21 @@
         <button type="button" data-c="tr" aria-label="Top right">&#8599;</button>
         <button type="button" data-c="bl" aria-label="Bottom left">&#8601;</button>
         <button type="button" data-c="br" aria-label="Bottom right">&#8600;</button>
+      </div>
+
+      <label style="margin-top:2px">Style settings</label>
+      <div id="fxShadow">
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-bottom:10px"><input type="checkbox" id="fxShadowOn" checked>Shadow / vignette</label>
+        <div class="texttools">
+          <div class="tt-block"><span class="tt-label">Strength</span><div class="dial" id="dShadowStr" style="min-width:88px"><span class="dk">Strength</span><span class="dv" id="shadowStrVal">100%</span></div></div>
+          <div class="tt-block"><span class="tt-label">Shadow color</span><div id="fxShadowSw" class="swatchpick"></div></div>
+        </div>
+      </div>
+      <div id="fxBlocks" style="display:none">
+        <div class="texttools">
+          <div class="tt-block"><span class="tt-label">Block color</span><div id="fxBlockSw" class="swatchpick"></div></div>
+          <div class="tt-block"><span class="tt-label">Block opacity</span><div class="dial" id="dBlockOp" style="min-width:88px"><span class="dk">Opacity</span><span class="dv" id="blockOpVal">100%</span></div></div>
+        </div>
       </div>
 
       <button id="setThumbBtn" disabled>Set as YouTube thumbnail</button>
@@ -550,7 +572,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.54</div>
+    <div class="foot">Magic Marquee · v0.56</div>
   </div>
 
   <script>
@@ -613,6 +635,13 @@
     let thumbPos = 'bl';          // text anchor: [t/m/b][l/c/r]
     let thumbStyle = 'cinematic'; // 'cinematic' (scrim + big bottom text) | 'blocks'
     let badgeCorner = ''; // '' = per-style default; else tl/tr/bl/br (user override)
+    let borderCustom = '#ffffff'; // custom border color
+    var styleFx = {
+      cinematic: { on: true, strength: 1, color: '#000000' },
+      spotlight: { on: true, strength: 1, color: '#000000' },
+      sidebar:   { on: true, strength: 1, color: '#0a0a0d' },
+      blocks:    { color: '#000000', opacity: 1 }
+    };
     let montserratReady = false;
     let bgScale = 1;              // background zoom (1 = cover)
     let bgOffsetX = 0;            // background pan (canvas px)
@@ -1466,7 +1495,7 @@
       for (var i = 0; i < blocks.length; i++) {
         var b = blocks[i];
         roundRectPath(ctx, b.x, b.y, b.blockW, b.blockH, 8);
-        ctx.fillStyle = '#000'; ctx.fill();
+        ctx.fillStyle = hexToRgba(styleFx.blocks.color, styleFx.blocks.opacity); ctx.fill();
         ctx.font = '800 ' + b.fs + 'px Montserrat, sans-serif';
         ctx.textBaseline = 'alphabetic';
         var baseline = b.y + opts.padY + b.asc;
@@ -1483,10 +1512,12 @@
 
     // CINEMATIC style: dark gradient rising from the bottom for legibility.
     function drawScrim(ctx, W, H) {
+      var fx = styleFx.cinematic; if (!fx.on) return;
+      var k = fx.strength, c = fx.color;
       var g = ctx.createLinearGradient(0, H * 0.32, 0, H);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(0.55, 'rgba(0,0,0,0.45)');
-      g.addColorStop(1, 'rgba(0,0,0,0.9)');
+      g.addColorStop(0, hexToRgba(c, 0));
+      g.addColorStop(0.55, hexToRgba(c, Math.min(1, 0.45 * k)));
+      g.addColorStop(1, hexToRgba(c, Math.min(1, 0.9 * k)));
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
     }
@@ -1518,9 +1549,8 @@
     function drawBorder(ctx, W, H, thin) {
       if (borderStyle === 'none') return;
       var bw = thin ? 11 : 20, inset = thin ? 7 : 12, r = thin ? 28 : 36;
-      var col = borderStyle === 'white' ? '#ffffff'
-              : borderStyle === 'black' ? '#0a0a0a'
-              : borderStyle === 'accent' ? accentColor
+      var col = borderStyle === 'accent' ? accentColor
+              : borderStyle === 'custom' ? borderCustom
               : '#f45911';
       roundRectPath(ctx, inset, inset, W - 2 * inset, H - 2 * inset, r);
       ctx.lineWidth = bw; ctx.strokeStyle = col; ctx.stroke();
@@ -1556,10 +1586,12 @@
     // SPOTLIGHT style: radial vignette (bright center, dark edges) + big text
     // with a soft glow so it reads anywhere. Text centered by default.
     function drawSpotlight(ctx, W, H) {
+      var fx = styleFx.spotlight; if (!fx.on) return;
+      var k = fx.strength, c = fx.color;
       var g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.22, W / 2, H / 2, Math.max(W, H) * 0.72);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(0.62, 'rgba(0,0,0,0.32)');
-      g.addColorStop(1, 'rgba(0,0,0,0.84)');
+      g.addColorStop(0, hexToRgba(c, 0));
+      g.addColorStop(0.62, hexToRgba(c, Math.min(1, 0.32 * k)));
+      g.addColorStop(1, hexToRgba(c, Math.min(1, 0.84 * k)));
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     }
     function drawOverlaySpotlight(ctx, W, H) {
@@ -1586,11 +1618,12 @@
     // SIDEBAR style: a dark panel down the left that fades into the image, with
     // the text stacked inside it. Text left-aligned, vertically centered.
     function drawSidebarPanel(ctx, W, H) {
-      var fadeEnd = W * 0.54;
+      var fx = styleFx.sidebar; if (!fx.on) return;
+      var k = fx.strength, c = fx.color, fadeEnd = W * 0.54;
       var g = ctx.createLinearGradient(0, 0, fadeEnd, 0);
-      g.addColorStop(0, 'rgba(10,10,13,0.95)');
-      g.addColorStop(0.74, 'rgba(10,10,13,0.93)');
-      g.addColorStop(1, 'rgba(10,10,13,0)');
+      g.addColorStop(0, hexToRgba(c, Math.min(1, 0.95 * k)));
+      g.addColorStop(0.74, hexToRgba(c, Math.min(1, 0.93 * k)));
+      g.addColorStop(1, hexToRgba(c, 0));
       ctx.fillStyle = g; ctx.fillRect(0, 0, fadeEnd, H);
     }
     function drawOverlaySidebar(ctx, W, H) {
@@ -1782,6 +1815,33 @@
         });
         row.appendChild(btn);
       });
+    }
+
+    // Reusable color palette: white/black + the accent set + an any-color picker.
+    function buildSwatchPick(el, getCur, onPick) {
+      if (!el) return;
+      el.innerHTML = '';
+      ['#ffffff', '#000000'].concat(accentColors).forEach(function (col) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.style.background = col; b.setAttribute('data-col', col);
+        if (col.toLowerCase() === String(getCur()).toLowerCase()) b.className = 'sel';
+        b.addEventListener('click', function () {
+          onPick(col);
+          Array.prototype.forEach.call(el.querySelectorAll('button'), function (c) { c.classList.remove('sel'); });
+          b.classList.add('sel');
+        });
+        el.appendChild(b);
+      });
+      var lab = document.createElement('label'); lab.className = 'swatch-any'; lab.title = 'Pick any color';
+      var inp = document.createElement('input'); inp.type = 'color';
+      try { inp.value = /^#[0-9a-fA-F]{6}$/.test(getCur()) ? getCur() : '#ffffff'; } catch (e) { }
+      inp.addEventListener('input', function () {
+        onPick(inp.value);
+        Array.prototype.forEach.call(el.querySelectorAll('button'), function (c) { c.classList.remove('sel'); });
+      });
+      var plus = document.createElement('span'); plus.textContent = '+';
+      lab.appendChild(inp); lab.appendChild(plus);
+      el.appendChild(lab);
     }
 
     function applyFrame(src, selEl) {
@@ -2154,6 +2214,8 @@
     makeDial('dBri', { get: function () { return grade.bright; }, set: function (v) { grade.bright = v; }, min: 0.5, max: 1.5, step: 0.05, def: 1, fmt: pct, onInput: liveGrade, onChange: finalGrade });
     makeDial('dSha', { get: function () { return grade.sharp; }, set: function (v) { grade.sharp = v; }, min: 0, max: 1, step: 0.05, def: 0, fmt: pct, onInput: finalGrade, onChange: finalGrade });
     makeDial('dSize', { get: function () { return textScale; }, set: function (v) { textScale = v; }, min: 0.7, max: 1.4, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+    makeDial('dShadowStr', { get: function () { return (styleFx[thumbStyle] && styleFx[thumbStyle].strength != null) ? styleFx[thumbStyle].strength : 1; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].strength = v; }, min: 0, max: 1.5, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+    makeDial('dBlockOp', { get: function () { return styleFx.blocks.opacity; }, set: function (v) { styleFx.blocks.opacity = v; }, min: 0, max: 1, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
 
     // Unified reset for all image adjustments (zoom, pan, and grade).
     document.getElementById('resetGradeBtn').addEventListener('click', function () {
@@ -2173,12 +2235,33 @@
           thumbPos = defPos[thumbStyle] || 'bl'; // sensible default per style
           buildPosGrid();
           syncLogoGrid();
+          syncStyleFx();
           drawThumb();
         });
       });
     })();
 
     function logoDefault() { return thumbStyle === 'cinematic' ? 'tl' : 'bl'; }
+    function syncStyleFx() {
+      var isBlocks = (thumbStyle === 'blocks');
+      var sb = document.getElementById('fxShadow'), bb = document.getElementById('fxBlocks');
+      if (sb) sb.style.display = isBlocks ? 'none' : '';
+      if (bb) bb.style.display = isBlocks ? '' : 'none';
+      if (isBlocks) {
+        var ov = document.getElementById('blockOpVal'); if (ov) ov.textContent = Math.round(styleFx.blocks.opacity * 100) + '%';
+        buildSwatchPick(document.getElementById('fxBlockSw'), function () { return styleFx.blocks.color; }, function (col) { styleFx.blocks.color = col; drawThumb(); });
+      } else {
+        var fx = styleFx[thumbStyle];
+        var on = document.getElementById('fxShadowOn'); if (on) on.checked = !!fx.on;
+        var sv = document.getElementById('shadowStrVal'); if (sv) sv.textContent = Math.round(fx.strength * 100) + '%';
+        buildSwatchPick(document.getElementById('fxShadowSw'), function () { return styleFx[thumbStyle].color; }, function (col) { styleFx[thumbStyle].color = col; drawThumb(); });
+      }
+    }
+    (function () {
+      var on = document.getElementById('fxShadowOn');
+      if (on) on.addEventListener('change', function () { if (styleFx[thumbStyle]) styleFx[thumbStyle].on = on.checked; drawThumb(); });
+      syncStyleFx();
+    })();
     function syncLogoGrid() {
       var g = document.getElementById('logoGrid'); if (!g) return;
       var eff = badgeCorner || logoDefault();
@@ -2200,11 +2283,14 @@
     (function () {
       var seg = document.getElementById('borderToggle');
       if (!seg) return;
+      var customRow = document.getElementById('borderCustomRow');
+      buildSwatchPick(customRow, function () { return borderCustom; }, function (col) { borderCustom = col; drawThumb(); });
       Array.prototype.forEach.call(seg.querySelectorAll('button'), function (btn) {
         btn.addEventListener('click', function () {
           borderStyle = btn.getAttribute('data-border');
           Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { b.classList.remove('sel'); });
           btn.classList.add('sel');
+          if (customRow) customRow.style.display = (borderStyle === 'custom') ? 'flex' : 'none';
           drawThumb();
         });
       });
