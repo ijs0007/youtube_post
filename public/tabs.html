@@ -217,6 +217,9 @@
     .fontpick { display:flex; flex-wrap:wrap; gap:8px; }
     .fontpick button { width:auto; padding:7px 13px; background:var(--chip); color:#fff; border:2px solid transparent; border-radius:9px; font-size:15px; line-height:1.1; cursor:pointer; }
     .fontpick button.sel { border-color:var(--accent); }
+    .txstyle { display:flex; flex-wrap:wrap; gap:8px; }
+    .txstyle button { width:auto; padding:7px 14px; background:var(--chip); color:#fff; border:2px solid transparent; border-radius:9px; font-size:14px; font-weight:600; line-height:1.1; cursor:pointer; }
+    .txstyle button.sel { border-color:var(--accent); }
     .logogrid { display:grid; grid-template-columns:repeat(2,40px); gap:6px; margin-bottom:18px; position:relative; }
     .logogrid button { width:40px; height:40px; background:var(--chip); color:var(--text-soft); padding:0; border-radius:8px; font-size:16px; line-height:1; }
     .logogrid button.sel { background:var(--accent); color:#fff; }
@@ -510,6 +513,7 @@
 
       <label>Text styling</label>
       <div style="margin-bottom:14px"><span class="tt-label" style="display:block;margin-bottom:8px">Headline font</span><div id="fontPick" class="fontpick"></div></div>
+      <div style="margin-bottom:14px"><span class="tt-label" style="display:block;margin-bottom:8px">Style</span><div class="txstyle"><button type="button" id="txItalic" style="font-style:italic">Italic</button><button type="button" id="txUnder" style="text-decoration:underline">Underline</button><button type="button" id="txStrike" style="text-decoration:line-through">Strike</button></div></div>
       <div class="texttools">
         <div class="tt-block">
           <span class="tt-label">Highlight color</span>
@@ -688,7 +692,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.87</div>
+    <div class="foot">Magic Marquee · v0.88</div>
   </div>
 
   <script>
@@ -764,6 +768,7 @@
     };
     let montserratReady = false;
     var headlineFont = 'Montserrat';   // chosen headline font family (the brand badge stays Montserrat)
+    var txItalic = false, txUnderline = false, txStrike = false;   // headline italic / underline / strikethrough
     let bgScale = 1;              // background zoom (1 = cover)
     let bgEdge = 0;               // edge fill, vertical (top/bottom)
     let bgEdgeH = 0;             // edge fill, horizontal (left/right)
@@ -1486,7 +1491,7 @@
     }
 
     function measureLine(ctx, str, fs) {
-      ctx.font = '800 ' + fs + 'px "' + headlineFont + '", sans-serif';
+      ctx.font = hFont(fs);
       var m = ctx.measureText(str);
       var asc = (m.actualBoundingBoxAscent != null) ? m.actualBoundingBoxAscent : fs * 0.72;
       var desc = (m.actualBoundingBoxDescent != null) ? m.actualBoundingBoxDescent : fs * 0.2;
@@ -1731,6 +1736,21 @@
       ctx.shadowColor = sc; ctx.shadowBlur = sb; ctx.shadowOffsetX = sox; ctx.shadowOffsetY = soy;
     }
 
+    // headline font string (family + optional italic). The badge is separate and stays Montserrat.
+    function hFont(px) {
+      return (txItalic ? 'italic ' : '') + '800 ' + px + 'px "' + headlineFont + '", sans-serif';
+    }
+    // underline / strikethrough drawn across a text row (canvas has no native decoration).
+    function txDeco(ctx, x1, x2, baseline, fs, col) {
+      if ((!txUnderline && !txStrike) || x2 <= x1) return;
+      var sc = ctx.shadowColor, sb = ctx.shadowBlur, sox = ctx.shadowOffsetX, soy = ctx.shadowOffsetY;
+      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+      ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, fs * 0.055); ctx.lineCap = 'butt';
+      if (txUnderline) { var yu = baseline + fs * 0.16; ctx.beginPath(); ctx.moveTo(x1, yu); ctx.lineTo(x2, yu); ctx.stroke(); }
+      if (txStrike) { var ys = baseline - fs * 0.32; ctx.beginPath(); ctx.moveTo(x1, ys); ctx.lineTo(x2, ys); ctx.stroke(); }
+      ctx.shadowColor = sc; ctx.shadowBlur = sb; ctx.shadowOffsetX = sox; ctx.shadowOffsetY = soy;
+    }
+
     // BLOCKS style: each line on its own black rounded block, white/accent words.
     function drawOverlayBlocks(ctx, W, H) {
       ctx.letterSpacing = textTrack + 'px';
@@ -1741,18 +1761,19 @@
         var b = blocks[i];
         roundRectPath(ctx, b.x, b.y, b.blockW, b.blockH, 8);
         ctx.fillStyle = hexToRgba(styleFx.blocks.color, styleFx.blocks.opacity); ctx.fill();
-        ctx.font = '800 ' + b.fs + 'px "' + headlineFont + '", sans-serif';
+        ctx.font = hFont(b.fs);
         ctx.textBaseline = 'alphabetic';
         var baseline = b.y + opts.padY + b.asc;
         var cx = b.x + opts.padX;
         var spaceW = ctx.measureText(' ').width;
         for (var k = 0; k < b.line.length; k++) {
-          ctx.font = '800 ' + (b.fs * (b.line[k].s || 1)) + 'px "' + headlineFont + '", sans-serif';
+          ctx.font = hFont(b.fs * (b.line[k].s || 1));
           extrude3D(ctx, b.line[k].t, cx, baseline);
           ctx.fillStyle = b.line[k].b ? accentColor : '#ffffff';
           ctx.fillText(b.line[k].t, cx, baseline);
           cx += ctx.measureText(b.line[k].t).width + spaceW;
         }
+        txDeco(ctx, b.x + opts.padX, cx - spaceW, baseline, b.fs, '#ffffff');
       }
     }
 
@@ -1799,7 +1820,7 @@
       var blocks = layoutOverlay(function (s, fs) { return measureLine(ctx, s, fs); }, src, opts);
       for (var i = 0; i < blocks.length; i++) {
         var b = blocks[i];
-        ctx.font = '800 ' + b.fs + 'px "' + headlineFont + '", sans-serif';
+        ctx.font = hFont(b.fs);
         ctx.textBaseline = 'alphabetic';
         var baseline = b.y + opts.padY + b.asc;
         var cx = b.x + opts.padX;
@@ -1807,7 +1828,7 @@
         var isC = (thumbStyle === 'custom');
         for (var k = 0; k < b.line.length; k++) {
           var w = b.line[k];
-          ctx.font = '800 ' + (b.fs * (w.s || 1)) + 'px "' + headlineFont + '", sans-serif';
+          ctx.font = hFont(b.fs * (w.s || 1));
           extrude3D(ctx, w.t, cx, baseline);
           if (!isC || customShadow.on) {
             ctx.fillStyle = isC ? hexToRgba(customShadow.color, customShadow.strength) : 'rgba(0,0,0,0.55)';
@@ -1821,6 +1842,7 @@
           ctx.fillText(w.t, cx, baseline);
           cx += ctx.measureText(w.t).width + spaceW;
         }
+        txDeco(ctx, b.x + opts.padX, cx - spaceW, baseline, b.fs, isC ? customTextColor : '#ffffff');
       }
     }
 
@@ -1884,15 +1906,16 @@
       ctx.textBaseline = 'alphabetic';
       for (var i = 0; i < blocks.length; i++) {
         var b = blocks[i];
-        ctx.font = '800 ' + b.fs + 'px "' + headlineFont + '", sans-serif';
+        ctx.font = hFont(b.fs);
         var baseline = b.y + opts.padY + b.asc, cx = b.x + opts.padX, spaceW = ctx.measureText(' ').width;
         for (var k = 0; k < b.line.length; k++) {
-          ctx.font = '800 ' + (b.fs * (b.line[k].s || 1)) + 'px "' + headlineFont + '", sans-serif';
+          ctx.font = hFont(b.fs * (b.line[k].s || 1));
           extrude3D(ctx, b.line[k].t, cx, baseline);
           ctx.fillStyle = b.line[k].b ? accentColor : '#ffffff';
           ctx.fillText(b.line[k].t, cx, baseline);
           cx += ctx.measureText(b.line[k].t).width + spaceW;
         }
+        txDeco(ctx, b.x + opts.padX, cx - spaceW, baseline, b.fs, '#ffffff');
       }
       ctx.restore();
     }
@@ -1916,15 +1939,16 @@
       ctx.textBaseline = 'alphabetic';
       for (var i = 0; i < blocks.length; i++) {
         var b = blocks[i];
-        ctx.font = '800 ' + b.fs + 'px "' + headlineFont + '", sans-serif';
+        ctx.font = hFont(b.fs);
         var baseline = b.y + opts.padY + b.asc, cx = b.x + opts.padX, spaceW = ctx.measureText(' ').width;
         for (var k = 0; k < b.line.length; k++) {
-          ctx.font = '800 ' + (b.fs * (b.line[k].s || 1)) + 'px "' + headlineFont + '", sans-serif';
+          ctx.font = hFont(b.fs * (b.line[k].s || 1));
           extrude3D(ctx, b.line[k].t, cx, baseline);
           ctx.fillStyle = b.line[k].b ? accentColor : '#ffffff';
           ctx.fillText(b.line[k].t, cx, baseline);
           cx += ctx.measureText(b.line[k].t).width + spaceW;
         }
+        txDeco(ctx, b.x + opts.padX, cx - spaceW, baseline, b.fs, '#ffffff');
       }
     }
 
@@ -2697,6 +2721,12 @@
       if (document.getElementById('d3Sw')) buildSwatchPick(document.getElementById('d3Sw'), function () { return d3.color; }, function (col) { d3.color = col; drawThumb(); });
     })();
     buildFontPick();
+    (function () {
+      function wireTog(id, g, st) { var b = document.getElementById(id); if (!b) return; if (g()) b.classList.add('sel'); b.addEventListener('click', function () { st(!g()); b.classList.toggle('sel', g()); drawThumb(); }); }
+      wireTog('txItalic', function () { return txItalic; }, function (v) { txItalic = v; });
+      wireTog('txUnder', function () { return txUnderline; }, function (v) { txUnderline = v; });
+      wireTog('txStrike', function () { return txStrike; }, function (v) { txStrike = v; });
+    })();
     makeDial('dShadowStr', { get: function () { return (styleFx[thumbStyle] && styleFx[thumbStyle].strength != null) ? styleFx[thumbStyle].strength : 1; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].strength = v; }, min: 0, max: 1.5, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dShadowAngle', { get: function () { var f = styleFx[thumbStyle]; return (f && f.angle != null) ? f.angle : 0; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].angle = v; }, min: 0, max: 360, step: 5, def: 0, fmt: function (v) { return Math.round(v) + '\u00b0'; }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dShadowReach', { get: function () { var f = styleFx[thumbStyle]; return (f && f.extent != null) ? f.extent : 0.68; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].extent = v; }, min: 0.1, max: 1, step: 0.02, def: 0.68, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
@@ -2858,7 +2888,7 @@
     function captureCustom() {
       var sc = styleFx.custom || { on: false, strength: 1, color: '#000000' };
       return {
-        pos: thumbPos, scale: textScale, track: textTrack, font: headlineFont, threeD: { on: d3.on, depth: d3.depth, angle: d3.angle, color: d3.color }, accent: accentColor,
+        pos: thumbPos, scale: textScale, track: textTrack, font: headlineFont, italic: txItalic, underline: txUnderline, strike: txStrike, threeD: { on: d3.on, depth: d3.depth, angle: d3.angle, color: d3.color }, accent: accentColor,
         border: borderStyle, borderCustom: borderCustom, badge: badgeCorner,
         textColor: customTextColor,
         outline: { on: customOutline.on, width: customOutline.width, color: customOutline.color },
@@ -2875,6 +2905,7 @@
       var so = document.getElementById('fxShadowOn'); if (so) so.checked = !!(styleFx.custom && styleFx.custom.on);
       var ft = document.getElementById('fitToggle'); if (ft) ft.checked = !freeText;
       buildFontPick();
+      [['txItalic', txItalic], ['txUnder', txUnderline], ['txStrike', txStrike]].forEach(function (p) { var b = document.getElementById(p[0]); if (b) b.classList.toggle('sel', p[1]); });
       var d3c = document.getElementById('d3On'); if (d3c) d3c.checked = !!d3.on;
       setDV('dD3Depth', '' + Math.round(d3.depth)); setDV('dD3Angle', Math.round(d3.angle) + '\u00b0');
       if (document.getElementById('d3Sw')) buildSwatchPick(document.getElementById('d3Sw'), function () { return d3.color; }, function (col) { d3.color = col; drawThumb(); });
@@ -2909,6 +2940,7 @@
       if (s.scale != null) textScale = s.scale;
       if (s.track != null) textTrack = s.track;
       if (s.font) headlineFont = s.font;
+      txItalic = !!s.italic; txUnderline = !!s.underline; txStrike = !!s.strike;
       if (s.threeD) d3 = { on: !!s.threeD.on, depth: (s.threeD.depth != null ? s.threeD.depth : 8), angle: (s.threeD.angle != null ? s.threeD.angle : 45), color: s.threeD.color || '#000000' };
       if (s.accent) accentColor = s.accent;
       if (s.border) borderStyle = s.border;
@@ -2934,7 +2966,7 @@
     // All synchronous, so the screen only repaints once (no flicker on the main canvas).
     function renderLookPreview(s, mini) {
       if (!mini) return;
-      var snap = { st: thumbStyle, pos: thumbPos, sc: textScale, tr: textTrack, fn: headlineFont, td: { on: d3.on, depth: d3.depth, angle: d3.angle, color: d3.color }, ac: accentColor, bd: borderStyle, bc: borderCustom, bg: badgeCorner, tc: customTextColor, ol: customOutline, sh: customShadow, cs: customCase, scr: styleFx.custom, ft: freeText };
+      var snap = { st: thumbStyle, pos: thumbPos, sc: textScale, tr: textTrack, fn: headlineFont, it: txItalic, un: txUnderline, sk: txStrike, td: { on: d3.on, depth: d3.depth, angle: d3.angle, color: d3.color }, ac: accentColor, bd: borderStyle, bc: borderCustom, bg: badgeCorner, tc: customTextColor, ol: customOutline, sh: customShadow, cs: customCase, scr: styleFx.custom, ft: freeText };
       try {
         setCustomState(s); thumbStyle = 'custom';
         drawThumb();
@@ -2942,7 +2974,7 @@
         mc.clearRect(0, 0, mini.width, mini.height);
         if (cnv) mc.drawImage(cnv, 0, 0, 1280, 720, 0, 0, mini.width, mini.height);
       } catch (e) {}
-      thumbStyle = snap.st; thumbPos = snap.pos; textScale = snap.sc; textTrack = (snap.tr != null ? snap.tr : textTrack); headlineFont = (snap.fn != null ? snap.fn : headlineFont); d3 = (snap.td != null ? snap.td : d3); accentColor = snap.ac; borderStyle = snap.bd; borderCustom = snap.bc; badgeCorner = snap.bg; customTextColor = snap.tc; customOutline = snap.ol; customShadow = snap.sh; customCase = snap.cs; styleFx.custom = snap.scr; freeText = snap.ft;
+      thumbStyle = snap.st; thumbPos = snap.pos; textScale = snap.sc; textTrack = (snap.tr != null ? snap.tr : textTrack); headlineFont = (snap.fn != null ? snap.fn : headlineFont); txItalic = !!snap.it; txUnderline = !!snap.un; txStrike = !!snap.sk; d3 = (snap.td != null ? snap.td : d3); accentColor = snap.ac; borderStyle = snap.bd; borderCustom = snap.bc; badgeCorner = snap.bg; customTextColor = snap.tc; customOutline = snap.ol; customShadow = snap.sh; customCase = snap.cs; styleFx.custom = snap.scr; freeText = snap.ft;
     }
     function renderTpls() {
       var list = document.getElementById('tplList'); if (!list) return;
@@ -3013,7 +3045,7 @@
         customCase = 'none';
         styleFx.custom = { on: false, strength: 1, color: '#000000' };
         accentColor = '#0eaaf5'; borderStyle = 'brand'; borderCustom = '#f45911';
-        badgeCorner = ''; textScale = 1; textTrack = 0; headlineFont = 'Montserrat'; d3 = { on: false, depth: 8, angle: 45, color: '#000000' }; freeText = false; thumbPos = 'bl';
+        badgeCorner = ''; textScale = 1; textTrack = 0; headlineFont = 'Montserrat'; txItalic = false; txUnderline = false; txStrike = false; d3 = { on: false, depth: 8, angle: 45, color: '#000000' }; freeText = false; thumbPos = 'bl';
         activeTplId = null;
         refreshCustomUI(); drawThumb(); renderTpls();
       });
