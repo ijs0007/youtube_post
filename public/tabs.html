@@ -418,7 +418,7 @@
         <button type="button" data-border="none">None</button>
       </div>
       <div id="borderCustomRow" class="swatchpick" style="display:none; margin-top:10px"></div>
-      <div class="thumbsticky"><div style="position:relative"><canvas id="thumbCanvas" width="1280" height="720"></canvas><button type="button" id="compareBtn" style="position:absolute;top:8px;right:8px;z-index:6;display:none;padding:4px 10px;font-size:11.5px;font-weight:700;letter-spacing:.02em;background:rgba(10,10,12,.62);color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:999px;cursor:pointer;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)">&#8646; Original</button></div></div>
+      <div class="thumbsticky"><canvas id="thumbCanvas" width="1280" height="720"></canvas><div style="display:flex;justify-content:flex-end;padding:7px 2px 0"><button type="button" id="compareBtn" style="display:none;width:auto;align-items:center;gap:5px;padding:5px 13px;font-size:12px;font-weight:700;letter-spacing:.02em;background:var(--chip);color:var(--text-soft);border:1px solid rgba(255,255,255,.14);border-radius:999px">&#8646; Edited</button></div></div>
       <p class="genstatus" id="thumbStatus"></p>
 
       <label>Frame from your film</label>
@@ -670,7 +670,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.78</div>
+    <div class="foot">Magic Marquee · v0.80</div>
   </div>
 
   <script>
@@ -2119,10 +2119,11 @@
       var b = document.getElementById('compareBtn');
       if (!b) return;
       if (!originalImg) { b.style.display = 'none'; showOriginal = false; return; }
-      b.style.display = '';
-      b.textContent = showOriginal ? '\u21c6 Edited' : '\u21c6 Original';
-      b.style.background = showOriginal ? 'var(--accent)' : 'rgba(10,10,12,.62)';
-      b.style.borderColor = showOriginal ? 'var(--accent)' : 'rgba(255,255,255,.18)';
+      b.style.display = 'inline-flex';
+      b.textContent = showOriginal ? '\u21c6 Original' : '\u21c6 Edited';
+      b.style.background = showOriginal ? 'var(--accent)' : 'var(--chip)';
+      b.style.color = showOriginal ? '#fff' : 'var(--text-soft)';
+      b.style.borderColor = showOriginal ? 'var(--accent)' : 'rgba(255,255,255,.14)';
     }
     function applyFrame(src, selEl, keepOriginal) {
       var img = new Image();
