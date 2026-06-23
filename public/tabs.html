@@ -434,9 +434,7 @@
       <div id="thumbCard" class="card" style="display:none">
       <label id="thumbHeading" style="font-size:15px; color:var(--text); margin-bottom:12px; cursor:pointer; user-select:none; -webkit-user-select:none">Thumbnail</label>
       <div id="styleToggle" class="segmented">
-        <button type="button" data-style="cinematic" class="sel">Cinematic</button>
-        <button type="button" data-style="spotlight">Spotlight</button>
-        <button type="button" data-style="sidebar">Sidebar</button>
+        <button type="button" data-style="cinematic" class="sel">Brand</button>
         <button type="button" data-style="blocks">Blocks</button>
         <button type="button" data-style="custom" id="styleCustomBtn" style="display:none">Custom</button>
       </div>
@@ -727,7 +725,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v1.0</div>
+    <div class="foot">Magic Marquee · v1.1</div>
   </div>
 
   <script>
@@ -797,8 +795,6 @@
     let borderCustom = '#ffffff'; // custom border color
     var styleFx = {
       cinematic: { on: true, strength: 1, color: '#000000' },
-      spotlight: { on: true, strength: 1, color: '#000000' },
-      sidebar:   { on: true, strength: 1, color: '#0a0a0d' },
       blocks:    { color: '#000000', opacity: 1 },
       custom:    { on: false, strength: 1, color: '#000000' }
     };
@@ -1943,71 +1939,6 @@
       ctx.fillText('JEREMIAH', tx, y0 + pillH / 2 + nameFs - 1);
     }
 
-    // SPOTLIGHT style: radial vignette (bright center, dark edges) + big text
-    // with a soft glow so it reads anywhere. Text centered by default.
-    function drawSpotlight(ctx, W, H) {
-      var fx = styleFx.spotlight; if (!fx.on) return;
-      var k = fx.strength, c = fx.color;
-      var g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.22, W / 2, H / 2, Math.max(W, H) * 0.72);
-      g.addColorStop(0, hexToRgba(c, 0));
-      g.addColorStop(0.62, hexToRgba(c, Math.min(1, 0.32 * k)));
-      g.addColorStop(1, hexToRgba(c, Math.min(1, 0.84 * k)));
-      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    }
-    function drawOverlaySpotlight(ctx, W, H) {
-      ctx.letterSpacing = textTrack + 'px';
-      if (!overlayLines.length) return;
-      var opts = { W: W, H: H, targetW: W * 0.72 * textScale, maxFont: 188 * textScale, minFont: 34 * textScale, padX: 0, padY: 4, lineGap: 6, margin: 56, anchor: thumbPos };
-      var blocks = layoutOverlay(function (s, fs) { return measureLine(ctx, s, fs); }, overlayLines, opts);
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 16;
-      ctx.textBaseline = 'alphabetic';
-      for (var i = 0; i < blocks.length; i++) {
-        var b = blocks[i];
-        ctx.font = hFont(b.fs);
-        var baseline = b.y + opts.padY + b.asc, cx = b.x + opts.padX, spaceW = ctx.measureText(' ').width;
-        for (var k = 0; k < b.line.length; k++) {
-          ctx.font = hFont(b.fs * (b.line[k].s || 1), b.line[k]);
-          extrude3D(ctx, b.line[k].t, cx, baseline);
-          ctx.fillStyle = b.line[k].c || customTextColor;
-          ctx.fillText(b.line[k].t, cx, baseline);
-          var _ww = ctx.measureText(b.line[k].t).width; if (b.line[k].u || b.line[k].k) txDeco(ctx, cx, cx + _ww, baseline, b.fs * (b.line[k].s || 1), b.line[k].c || customTextColor, b.line[k].u, b.line[k].k); cx += _ww + spaceW;
-        }
-      }
-      ctx.restore();
-    }
-
-    // SIDEBAR style: a dark panel down the left that fades into the image, with
-    // the text stacked inside it. Text left-aligned, vertically centered.
-    function drawSidebarPanel(ctx, W, H) {
-      var fx = styleFx.sidebar; if (!fx.on) return;
-      var k = fx.strength, c = fx.color, fadeEnd = W * 0.54;
-      var g = ctx.createLinearGradient(0, 0, fadeEnd, 0);
-      g.addColorStop(0, hexToRgba(c, Math.min(1, 0.95 * k)));
-      g.addColorStop(0.74, hexToRgba(c, Math.min(1, 0.93 * k)));
-      g.addColorStop(1, hexToRgba(c, 0));
-      ctx.fillStyle = g; ctx.fillRect(0, 0, fadeEnd, H);
-    }
-    function drawOverlaySidebar(ctx, W, H) {
-      ctx.letterSpacing = textTrack + 'px';
-      if (!overlayLines.length) return;
-      var opts = { W: W, H: H, targetW: W * 0.30 * textScale, maxFont: 92 * textScale, minFont: 24 * textScale, padX: 0, padY: 6, lineGap: 8, margin: 54, anchor: thumbPos };
-      var blocks = layoutOverlay(function (s, fs) { return measureLine(ctx, s, fs); }, overlayLines, opts);
-      ctx.textBaseline = 'alphabetic';
-      for (var i = 0; i < blocks.length; i++) {
-        var b = blocks[i];
-        ctx.font = hFont(b.fs);
-        var baseline = b.y + opts.padY + b.asc, cx = b.x + opts.padX, spaceW = ctx.measureText(' ').width;
-        for (var k = 0; k < b.line.length; k++) {
-          ctx.font = hFont(b.fs * (b.line[k].s || 1), b.line[k]);
-          extrude3D(ctx, b.line[k].t, cx, baseline);
-          ctx.fillStyle = b.line[k].c || customTextColor;
-          ctx.fillText(b.line[k].t, cx, baseline);
-          var _ww = ctx.measureText(b.line[k].t).width; if (b.line[k].u || b.line[k].k) txDeco(ctx, cx, cx + _ww, baseline, b.fs * (b.line[k].s || 1), b.line[k].c || customTextColor, b.line[k].u, b.line[k].k); cx += _ww + spaceW;
-        }
-      }
-    }
-
     function drawThumb() {
       var c = document.getElementById('thumbCanvas');
       if (!c) return;
@@ -2035,14 +1966,6 @@
         drawScrim(ctx, 1280, 720); if (!overlayHidden) drawOverlayClean(ctx, 1280, 720);
         drawBorder(ctx, 1280, 720, true);
         drawBadge(ctx, 1280, 720, badgeCorner || 'tl', true);
-      } else if (thumbStyle === 'spotlight') {
-        drawSpotlight(ctx, 1280, 720); if (!overlayHidden) drawOverlaySpotlight(ctx, 1280, 720);
-        drawBorder(ctx, 1280, 720, true);
-        drawBadge(ctx, 1280, 720, badgeCorner || 'bl', true);
-      } else if (thumbStyle === 'sidebar') {
-        drawSidebarPanel(ctx, 1280, 720); if (!overlayHidden) drawOverlaySidebar(ctx, 1280, 720);
-        drawBorder(ctx, 1280, 720, true);
-        drawBadge(ctx, 1280, 720, badgeCorner || 'bl', true);
       } else if (thumbStyle === 'custom') {
         drawScrim(ctx, 1280, 720); if (!overlayHidden) drawOverlayClean(ctx, 1280, 720);
         drawBorder(ctx, 1280, 720, true);
@@ -3023,7 +2946,7 @@
           thumbStyle = btn.getAttribute('data-style');
           Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { b.classList.remove('sel'); });
           btn.classList.add('sel');
-          var defPos = { cinematic: 'bl', spotlight: 'mc', sidebar: 'ml', blocks: 'tr', custom: 'bl' };
+          var defPos = { cinematic: 'bl', blocks: 'tr', custom: 'bl' };
           thumbPos = defPos[thumbStyle] || 'bl'; // sensible default per style
           buildPosGrid();
           syncLogoGrid();
