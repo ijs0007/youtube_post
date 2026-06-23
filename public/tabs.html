@@ -518,6 +518,8 @@
         <div class="tt-block">
           <span class="tt-label">Size</span>
           <div class="dial" id="dSize" style="min-width:60px"><span class="dk">Size</span><span class="dv" id="sizeVal">100%</span></div>
+          <span class="tt-label" style="margin-top:10px">Letter spacing</span>
+          <div class="dial" id="dTrack" style="min-width:60px"><span class="dk">&#8596; Spacing</span><span class="dv" id="trackVal">0</span></div>
           <span class="tt-label" style="margin-top:10px">Logo corner</span>
           <div id="logoGrid" class="logogrid">
             <button type="button" data-c="tl" aria-label="Top left">&#8598;</button>
@@ -670,7 +672,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.83</div>
+    <div class="foot">Magic Marquee · v0.84</div>
   </div>
 
   <script>
@@ -753,6 +755,7 @@
     let bgOffsetX = 0;            // background pan (canvas px)
     let bgOffsetY = 0;
     let textScale = 1;           // global text-size multiplier
+    let textTrack = 0;           // headline letter spacing in px; the auto-fit re-measures with it
     let freeText = false;        // false = fit each row to width; true = absolute per-word sizing
     let customTextColor = '#ffffff';                       // custom: base color for non-popped words
     let customOutline = { on: false, width: 8, color: '#000000' }; // custom: text outline
@@ -1698,6 +1701,7 @@
 
     // BLOCKS style: each line on its own black rounded block, white/accent words.
     function drawOverlayBlocks(ctx, W, H) {
+      ctx.letterSpacing = textTrack + 'px';
       if (!overlayLines.length) return;
       var opts = { W: W, H: H, targetW: W * 0.47 * textScale, maxFont: 108 * textScale, minFont: 26 * textScale, padX: 18, padY: 10, lineGap: 12, margin: 48, anchor: thumbPos };
       var blocks = layoutOverlay(function (s, fs) { return measureLine(ctx, s, fs); }, overlayLines, opts);
@@ -1752,6 +1756,7 @@
 
     // CINEMATIC style: big text, no blocks, soft drop shadow for pop.
     function drawOverlayClean(ctx, W, H) {
+      ctx.letterSpacing = textTrack + 'px';
       if (!overlayLines.length) return;
       var opts = { W: W, H: H, targetW: W * 0.64 * textScale, maxFont: 170 * textScale, minFont: 34 * textScale, padX: 0, padY: 4, lineGap: 4, margin: 56, anchor: thumbPos };
       var src = overlayLines;
@@ -1796,6 +1801,7 @@
     }
 
     function drawBadge(ctx, W, H, corner, subtle) {
+      ctx.letterSpacing = '0px';
       if (badgeHidden) return;
       var M = 34, pillH = subtle ? 70 : 84, avD = pillH - (subtle ? 16 : 22), pad = 12;
       var nameFs = subtle ? 21 : 23;
@@ -1835,6 +1841,7 @@
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
     }
     function drawOverlaySpotlight(ctx, W, H) {
+      ctx.letterSpacing = textTrack + 'px';
       if (!overlayLines.length) return;
       var opts = { W: W, H: H, targetW: W * 0.72 * textScale, maxFont: 188 * textScale, minFont: 34 * textScale, padX: 0, padY: 4, lineGap: 6, margin: 56, anchor: thumbPos };
       var blocks = layoutOverlay(function (s, fs) { return measureLine(ctx, s, fs); }, overlayLines, opts);
@@ -1867,6 +1874,7 @@
       ctx.fillStyle = g; ctx.fillRect(0, 0, fadeEnd, H);
     }
     function drawOverlaySidebar(ctx, W, H) {
+      ctx.letterSpacing = textTrack + 'px';
       if (!overlayLines.length) return;
       var opts = { W: W, H: H, targetW: W * 0.30 * textScale, maxFont: 92 * textScale, minFont: 24 * textScale, padX: 0, padY: 6, lineGap: 8, margin: 54, anchor: thumbPos };
       var blocks = layoutOverlay(function (s, fs) { return measureLine(ctx, s, fs); }, overlayLines, opts);
@@ -2494,6 +2502,7 @@
     function gradeReadout() {
       document.getElementById('zoomVal').textContent = bgScale.toFixed(1) + '\u00d7';
       document.getElementById('sizeVal').textContent = Math.round(textScale * 100) + '%';
+      var _tv = document.getElementById('trackVal'); if (_tv) _tv.textContent = (textTrack > 0 ? '+' : '') + textTrack;
       document.getElementById('satVal').textContent = Math.round(grade.sat * 100) + '%';
       document.getElementById('conVal').textContent = Math.round(grade.contrast * 100) + '%';
       document.getElementById('briVal').textContent = Math.round(grade.bright * 100) + '%';
@@ -2616,6 +2625,7 @@
     makeDial('dBri', { get: function () { return grade.bright; }, set: function (v) { grade.bright = v; }, min: 0.5, max: 1.5, step: 0.05, def: 1, fmt: pct, onInput: liveGrade, onChange: finalGrade });
     makeDial('dSha', { get: function () { return grade.sharp; }, set: function (v) { grade.sharp = v; }, min: 0, max: 1, step: 0.05, def: 0, fmt: pct, onInput: finalGrade, onChange: finalGrade });
     makeDial('dSize', { get: function () { return textScale; }, set: function (v) { textScale = v; }, min: 0.7, max: 1.4, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+    makeDial('dTrack', { get: function () { return textTrack; }, set: function (v) { textTrack = v; }, min: -8, max: 20, step: 1, def: 0, fmt: function (v) { v = Math.round(v); return v > 0 ? '+' + v : '' + v; }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dShadowStr', { get: function () { return (styleFx[thumbStyle] && styleFx[thumbStyle].strength != null) ? styleFx[thumbStyle].strength : 1; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].strength = v; }, min: 0, max: 1.5, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dShadowAngle', { get: function () { var f = styleFx[thumbStyle]; return (f && f.angle != null) ? f.angle : 0; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].angle = v; }, min: 0, max: 360, step: 5, def: 0, fmt: function (v) { return Math.round(v) + '\u00b0'; }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dShadowReach', { get: function () { var f = styleFx[thumbStyle]; return (f && f.extent != null) ? f.extent : 0.68; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].extent = v; }, min: 0.1, max: 1, step: 0.02, def: 0.68, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
@@ -2777,7 +2787,7 @@
     function captureCustom() {
       var sc = styleFx.custom || { on: false, strength: 1, color: '#000000' };
       return {
-        pos: thumbPos, scale: textScale, accent: accentColor,
+        pos: thumbPos, scale: textScale, track: textTrack, accent: accentColor,
         border: borderStyle, borderCustom: borderCustom, badge: badgeCorner,
         textColor: customTextColor,
         outline: { on: customOutline.on, width: customOutline.width, color: customOutline.color },
@@ -2801,6 +2811,7 @@
       setDV('dShadowSoft', Math.round((styleFx.custom && styleFx.custom.falloff != null ? styleFx.custom.falloff : 0.5) * 100) + '%');
       setDV('dShadowPos', Math.round((styleFx.custom && styleFx.custom.pos != null ? styleFx.custom.pos : 0) * 100) + '%');
       setDV('dSize', Math.round(textScale * 100) + '%');
+      setDV('dTrack', (textTrack > 0 ? '+' : '') + textTrack);
       if (document.getElementById('fxTextSw')) buildSwatchPick(document.getElementById('fxTextSw'), function () { return customTextColor; }, function (c) { customTextColor = c; drawThumb(); });
       if (document.getElementById('fxOutlineSw')) buildSwatchPick(document.getElementById('fxOutlineSw'), function () { return customOutline.color; }, function (c) { customOutline.color = c; drawThumb(); });
       if (document.getElementById('fxTextShadowSw')) buildSwatchPick(document.getElementById('fxTextShadowSw'), function () { return customShadow.color; }, function (c) { customShadow.color = c; drawThumb(); });
@@ -2821,6 +2832,7 @@
       if (!s) return;
       if (s.pos) thumbPos = s.pos;
       if (s.scale != null) textScale = s.scale;
+      if (s.track != null) textTrack = s.track;
       if (s.accent) accentColor = s.accent;
       if (s.border) borderStyle = s.border;
       if (s.borderCustom) borderCustom = s.borderCustom;
@@ -2845,7 +2857,7 @@
     // All synchronous, so the screen only repaints once (no flicker on the main canvas).
     function renderLookPreview(s, mini) {
       if (!mini) return;
-      var snap = { st: thumbStyle, pos: thumbPos, sc: textScale, ac: accentColor, bd: borderStyle, bc: borderCustom, bg: badgeCorner, tc: customTextColor, ol: customOutline, sh: customShadow, cs: customCase, scr: styleFx.custom, ft: freeText };
+      var snap = { st: thumbStyle, pos: thumbPos, sc: textScale, tr: textTrack, ac: accentColor, bd: borderStyle, bc: borderCustom, bg: badgeCorner, tc: customTextColor, ol: customOutline, sh: customShadow, cs: customCase, scr: styleFx.custom, ft: freeText };
       try {
         setCustomState(s); thumbStyle = 'custom';
         drawThumb();
@@ -2853,7 +2865,7 @@
         mc.clearRect(0, 0, mini.width, mini.height);
         if (cnv) mc.drawImage(cnv, 0, 0, 1280, 720, 0, 0, mini.width, mini.height);
       } catch (e) {}
-      thumbStyle = snap.st; thumbPos = snap.pos; textScale = snap.sc; accentColor = snap.ac; borderStyle = snap.bd; borderCustom = snap.bc; badgeCorner = snap.bg; customTextColor = snap.tc; customOutline = snap.ol; customShadow = snap.sh; customCase = snap.cs; styleFx.custom = snap.scr; freeText = snap.ft;
+      thumbStyle = snap.st; thumbPos = snap.pos; textScale = snap.sc; textTrack = (snap.tr != null ? snap.tr : textTrack); accentColor = snap.ac; borderStyle = snap.bd; borderCustom = snap.bc; badgeCorner = snap.bg; customTextColor = snap.tc; customOutline = snap.ol; customShadow = snap.sh; customCase = snap.cs; styleFx.custom = snap.scr; freeText = snap.ft;
     }
     function renderTpls() {
       var list = document.getElementById('tplList'); if (!list) return;
@@ -2924,7 +2936,7 @@
         customCase = 'none';
         styleFx.custom = { on: false, strength: 1, color: '#000000' };
         accentColor = '#0eaaf5'; borderStyle = 'brand'; borderCustom = '#f45911';
-        badgeCorner = ''; textScale = 1; freeText = false; thumbPos = 'bl';
+        badgeCorner = ''; textScale = 1; textTrack = 0; freeText = false; thumbPos = 'bl';
         activeTplId = null;
         refreshCustomUI(); drawThumb(); renderTpls();
       });
