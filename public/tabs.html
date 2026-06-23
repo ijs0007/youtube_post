@@ -739,7 +739,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.95</div>
+    <div class="foot">Magic Marquee · v0.97</div>
   </div>
 
   <script>
@@ -1909,9 +1909,9 @@
             ctx.lineJoin = 'round'; ctx.lineWidth = customOutline.width; ctx.strokeStyle = customOutline.color;
             ctx.strokeText(w.t, cx, baseline);
           }
-          ctx.fillStyle = w.b ? (_hlg || accentColor) : (isC ? (_txg || customTextColor) : '#ffffff');
+          ctx.fillStyle = w.b ? (_hlg || accentColor) : (isC ? (w.c || _txg || customTextColor) : '#ffffff');
           ctx.fillText(w.t, cx, baseline);
-          var _ww = ctx.measureText(w.t).width; if (w.u || w.k) txDeco(ctx, cx, cx + _ww, baseline, b.fs * (w.s || 1), w.b ? (_hlg || accentColor) : (isC ? (_txg || customTextColor) : '#ffffff'), w.u, w.k); cx += _ww + spaceW;
+          var _ww = ctx.measureText(w.t).width; if (w.u || w.k) txDeco(ctx, cx, cx + _ww, baseline, b.fs * (w.s || 1), w.b ? (_hlg || accentColor) : (isC ? (w.c || _txg || customTextColor) : '#ffffff'), w.u, w.k); cx += _ww + spaceW;
         }
       }
     }
@@ -2102,7 +2102,7 @@
       var el = document.getElementById('selInfo'), cl = document.getElementById('selClear'), n = selWords.size;
       if (el) el.textContent = n ? (n + ' selected') : 'nothing selected (Pop affects all)';
       if (cl) cl.style.display = n ? '' : 'none';
-      updateStyleBtns();
+      updateStyleBtns(); refreshTextSw();
     }
     function applyWordAttr(attr) {
       var t = selTargets(); if (!t.length) return;
@@ -2117,6 +2117,55 @@
         var on = t.length && t.every(function (k) { var p = k.split(':'); return overlayLines[+p[0]][+p[1]][pair[1]]; });
         b.classList.toggle('sel', !!on);
       });
+    }
+    function curTextColor() {
+      if (selWords.size) {
+        var t = selTargets(), first = null, mixed = false;
+        t.forEach(function (k) { var p = k.split(':'); var c = overlayLines[+p[0]][+p[1]].c || customTextColor; if (first === null) first = c; else if (c !== first) mixed = true; });
+        return mixed ? '' : (first || customTextColor);
+      }
+      return customTextColor;
+    }
+    function applyTextColor(c) {
+      if (selWords.size) {
+        selTargets().forEach(function (k) { var p = k.split(':'); overlayLines[+p[0]][+p[1]].c = c; });
+        drawThumb(); refreshTextSw();
+      } else { customTextColor = c; drawThumb(); }
+    }
+    function refreshTextSw() {
+      var el = document.getElementById('fxTextSw');
+      if (el) buildSwatchPick(el, curTextColor, applyTextColor, txGrad);
+    }
+    function reflectChipSelection() {
+      var box = document.getElementById('wordChips'); if (!box) return;
+      var chips = box.querySelectorAll('.chip'), idx = 0;
+      for (var li = 0; li < overlayLines.length; li++) {
+        for (var wi = 0; wi < overlayLines[li].length; wi++) {
+          var chip = chips[idx++]; if (chip) chip.classList.toggle('chipsel', selWords.has(li + ':' + wi));
+        }
+      }
+    }
+    function boxSelectToChips() {
+      var ta = document.getElementById('overlayText'); if (!ta) return;
+      var start = ta.selectionStart, end = ta.selectionEnd;
+      if (start == null || end == null || start === end) return;
+      var text = ta.value, rows = text.split('\n'), rowOff = 0, li = 0;
+      selWords.clear();
+      for (var r = 0; r < rows.length && li < 5; r++) {
+        var row = rows[r], words = [], i = 0, n = row.length;
+        while (i < n) {
+          while (i < n && row.charAt(i) === ' ') i++;
+          if (i >= n) break;
+          var st = i; while (i < n && row.charAt(i) !== ' ') i++;
+          words.push([rowOff + st, rowOff + i]);
+        }
+        rowOff += row.length + 1;
+        if (!words.length) continue;
+        if (words.length > 8) words = words.slice(0, 8);
+        for (var wi = 0; wi < words.length; wi++) { if (words[wi][0] < end && words[wi][1] > start) selWords.add(li + ':' + wi); }
+        li++;
+      }
+      reflectChipSelection(); updateSelInfo();
     }
     (function () {
       var pop = document.getElementById('txPop');
@@ -2634,6 +2683,7 @@
       }
     })();
 
+    document.getElementById('overlayText').addEventListener('select', boxSelectToChips);
     document.getElementById('overlayText').addEventListener('input', function (e) {
       overlayLines = parseOverlayToLines(e.target.value, overlayLines);
       selWords.clear(); updateSelInfo();
@@ -2884,7 +2934,7 @@
         tog.textContent = txGrad.on ? 'Gradient \u2713' : '+ Gradient';
         var p = document.getElementById('txGradPanel'); if (p) p.style.display = txGrad.on ? 'block' : 'none';
         var sm1 = document.getElementById('txGmode1'), sm2 = document.getElementById('txGmode2'); if (sm1 && sm2) { sm1.classList.toggle('sel', txGrad.mode !== 2); sm2.classList.toggle('sel', txGrad.mode === 2); } var stw = document.getElementById('txWhole'); if (stw) stw.checked = !!txGrad.whole;
-        if (document.getElementById('fxTextSw')) buildSwatchPick(document.getElementById('fxTextSw'), function () { return customTextColor; }, function (c) { customTextColor = c; drawThumb(); }, txGrad);
+        if (document.getElementById('fxTextSw')) buildSwatchPick(document.getElementById('fxTextSw'), curTextColor, applyTextColor, txGrad);
         drawThumb();
       });
       var tm1 = document.getElementById('txGmode1'), tm2 = document.getElementById('txGmode2');
@@ -3035,7 +3085,7 @@
     // Custom-room expert text controls (only visible when the Custom style is active).
     (function () {
       var to = document.getElementById('fxOutlineOn'), ts = document.getElementById('fxShadowTextOn');
-      if (document.getElementById('fxTextSw')) buildSwatchPick(document.getElementById('fxTextSw'), function () { return customTextColor; }, function (c) { customTextColor = c; drawThumb(); }, txGrad);
+      if (document.getElementById('fxTextSw')) buildSwatchPick(document.getElementById('fxTextSw'), curTextColor, applyTextColor, txGrad);
       if (document.getElementById('fxOutlineSw')) buildSwatchPick(document.getElementById('fxOutlineSw'), function () { return customOutline.color; }, function (c) { customOutline.color = c; drawThumb(); });
       if (document.getElementById('fxTextShadowSw')) buildSwatchPick(document.getElementById('fxTextShadowSw'), function () { return customShadow.color; }, function (c) { customShadow.color = c; drawThumb(); });
       if (to) to.addEventListener('change', function () { customOutline.on = to.checked; drawThumb(); });
@@ -3098,7 +3148,7 @@
       setDV('dShadowPos', Math.round((styleFx.custom && styleFx.custom.pos != null ? styleFx.custom.pos : 0) * 100) + '%');
       setDV('dSize', Math.round(textScale * 100) + '%');
       setDV('dTrack', (textTrack > 0 ? '+' : '') + textTrack);
-      if (document.getElementById('fxTextSw')) buildSwatchPick(document.getElementById('fxTextSw'), function () { return customTextColor; }, function (c) { customTextColor = c; drawThumb(); }, txGrad);
+      if (document.getElementById('fxTextSw')) buildSwatchPick(document.getElementById('fxTextSw'), curTextColor, applyTextColor, txGrad);
       if (document.getElementById('fxOutlineSw')) buildSwatchPick(document.getElementById('fxOutlineSw'), function () { return customOutline.color; }, function (c) { customOutline.color = c; drawThumb(); });
       if (document.getElementById('fxTextShadowSw')) buildSwatchPick(document.getElementById('fxTextShadowSw'), function () { return customShadow.color; }, function (c) { customShadow.color = c; drawThumb(); });
       if (document.getElementById('fxShadowSw')) buildSwatchPick(document.getElementById('fxShadowSw'), function () { return (styleFx.custom || {}).color || '#000000'; }, function (c) { styleFx.custom = styleFx.custom || { on: false, strength: 1, color: '#000000' }; styleFx.custom.color = c; drawThumb(); });
