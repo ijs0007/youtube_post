@@ -669,7 +669,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.73</div>
+    <div class="foot">Magic Marquee · v0.74</div>
   </div>
 
   <script>
@@ -2245,18 +2245,28 @@
       var cx = (W - dw) / 2, cy = (H - dh) / 2;
       var dx = Math.max(-dw / 2, Math.min(W - dw / 2, cx + bgOffsetX));
       var dy = Math.max(-dh / 2, Math.min(H - dh / 2, cy + bgOffsetY));
-      var coversX = dx <= 0.5 && dx + dw >= W - 0.5;
-      var coversY = dy <= 0.5 && dy + dh >= H - 0.5;
-      if (coversX && coversY) return { full: true };
+      // Keep region = the drawn image clipped to the un-cropped area. Cropped edges count as gaps
+      // for the model to fill, just like the bars exposed by zooming out.
+      var vx0 = trim.l * W, vx1 = W - trim.r * W, vy0 = trim.t * H, vy1 = H - trim.b * H;
+      var kx0 = Math.max(dx, vx0), ky0 = Math.max(dy, vy0), kx1 = Math.min(dx + dw, vx1), ky1 = Math.min(dy + dh, vy1);
+      if (kx1 <= kx0 || ky1 <= ky0) return { full: true };
+      if (kx0 <= 0.5 && ky0 <= 0.5 && kx1 >= W - 0.5 && ky1 >= H - 0.5) return { full: true };
       var rx = dx * k, ry = BY + dy * k, rw = dw * k, rh = dh * k;
+      var mkx = kx0 * k, mky = BY + ky0 * k, mkw = (kx1 - kx0) * k, mkh = (ky1 - ky0) * k;
       var ic = document.createElement('canvas'); ic.width = MW; ic.height = MH;
       var ictx = ic.getContext('2d');
       ictx.fillStyle = '#000'; ictx.fillRect(0, 0, MW, MH);
       ictx.drawImage(img, rx, ry, rw, rh);
+      // Black out everything outside the kept region (cropped edges) so the model regenerates it.
+      ictx.fillStyle = '#000';
+      ictx.fillRect(0, 0, MW, mky);
+      ictx.fillRect(0, mky + mkh, MW, MH - mky - mkh);
+      ictx.fillRect(0, mky, mkx, mkh);
+      ictx.fillRect(mkx + mkw, mky, MW - mkx - mkw, mkh);
       var mc = document.createElement('canvas'); mc.width = MW; mc.height = MH;
       var mctx = mc.getContext('2d');
       mctx.clearRect(0, 0, MW, MH);
-      mctx.fillStyle = '#ffffff'; mctx.fillRect(rx, ry, rw, rh);
+      mctx.fillStyle = '#ffffff'; mctx.fillRect(mkx, mky, mkw, mkh);
       return { image: ic.toDataURL('image/jpeg', 0.92), mask: mc.toDataURL('image/png') };
     }
     function runExtend() {
