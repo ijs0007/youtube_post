@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#1a1a1c">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Bangers&family=Bebas+Neue&family=Montserrat:wght@800&family=Oswald:wght@700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <title>Magic Marquee</title>
   <style>
     :root {
@@ -209,11 +209,14 @@
     .statusstrip #topBusyLabel { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
     .placeholder { color:var(--text-soft); font-size:13.5px; line-height:1.55; text-align:center; }
     .placeholder b { color:var(--text); font-weight:600; }
-    .texttools { display:flex; flex-wrap:wrap; gap:16px 16px; align-items:flex-start; margin-bottom:16px; }
+    .texttools { display:flex; flex-wrap:wrap; gap:16px 12px; align-items:flex-start; margin-bottom:16px; }
     .tt-block { display:flex; flex-direction:column; gap:8px; }
     .tt-label { font-size:11px; font-weight:700; color:var(--text-soft); letter-spacing:.04em; text-transform:uppercase; }
-    .texttools .swatches { grid-template-columns:repeat(4,30px); margin-bottom:0; }
+    .texttools .swatches { grid-template-columns:repeat(3,30px); margin-bottom:0; }
     .texttools .posgrid { margin-bottom:0; }
+    .fontpick { display:flex; flex-wrap:wrap; gap:8px; }
+    .fontpick button { width:auto; padding:7px 13px; background:var(--chip); color:#fff; border:2px solid transparent; border-radius:9px; font-size:15px; line-height:1.1; cursor:pointer; }
+    .fontpick button.sel { border-color:var(--accent); }
     .logogrid { display:grid; grid-template-columns:repeat(2,40px); gap:6px; margin-bottom:18px; position:relative; }
     .logogrid button { width:40px; height:40px; background:var(--chip); color:var(--text-soft); padding:0; border-radius:8px; font-size:16px; line-height:1; }
     .logogrid button.sel { background:var(--accent); color:#fff; }
@@ -506,6 +509,7 @@
       <div id="wordChips" class="chips"></div>
 
       <label>Text styling</label>
+      <div style="margin-bottom:14px"><span class="tt-label" style="display:block;margin-bottom:8px">Headline font</span><div id="fontPick" class="fontpick"></div></div>
       <div class="texttools">
         <div class="tt-block">
           <span class="tt-label">Highlight color</span>
@@ -520,7 +524,9 @@
           <div class="dial" id="dSize" style="min-width:60px"><span class="dk">Size</span><span class="dv" id="sizeVal">100%</span></div>
           <span class="tt-label" style="margin-top:10px">Letter spacing</span>
           <div class="dial" id="dTrack" style="min-width:60px"><span class="dk">&#8596; Spacing</span><span class="dv" id="trackVal">0</span></div>
-          <span class="tt-label" style="margin-top:10px">Logo corner</span>
+        </div>
+        <div class="tt-block">
+          <span class="tt-label">Logo corner</span>
           <div id="logoGrid" class="logogrid">
             <button type="button" data-c="tl" aria-label="Top left">&#8598;</button>
             <button type="button" data-c="tr" aria-label="Top right">&#8599;</button>
@@ -682,7 +688,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.86</div>
+    <div class="foot">Magic Marquee · v0.87</div>
   </div>
 
   <script>
@@ -757,6 +763,7 @@
       custom:    { on: false, strength: 1, color: '#000000' }
     };
     let montserratReady = false;
+    var headlineFont = 'Montserrat';   // chosen headline font family (the brand badge stays Montserrat)
     let bgScale = 1;              // background zoom (1 = cover)
     let bgEdge = 0;               // edge fill, vertical (top/bottom)
     let bgEdgeH = 0;             // edge fill, horizontal (left/right)
@@ -1459,7 +1466,8 @@
     function ensureFont() {
       if (montserratReady) return Promise.resolve();
       if (document.fonts && document.fonts.load) {
-        return document.fonts.load('800 80px Montserrat')
+        var jobs = ['800 80px Montserrat', '80px Anton', '80px "Bebas Neue"', '700 80px Oswald', '80px "Archivo Black"', '80px Bangers', '800 80px Poppins'].map(function (f) { return document.fonts.load(f).catch(function () {}); });
+        return Promise.all(jobs)
           .then(function () { montserratReady = true; })
           .catch(function () { montserratReady = true; });
       }
@@ -1478,7 +1486,7 @@
     }
 
     function measureLine(ctx, str, fs) {
-      ctx.font = '800 ' + fs + 'px Montserrat, sans-serif';
+      ctx.font = '800 ' + fs + 'px "' + headlineFont + '", sans-serif';
       var m = ctx.measureText(str);
       var asc = (m.actualBoundingBoxAscent != null) ? m.actualBoundingBoxAscent : fs * 0.72;
       var desc = (m.actualBoundingBoxDescent != null) ? m.actualBoundingBoxDescent : fs * 0.2;
@@ -1733,13 +1741,13 @@
         var b = blocks[i];
         roundRectPath(ctx, b.x, b.y, b.blockW, b.blockH, 8);
         ctx.fillStyle = hexToRgba(styleFx.blocks.color, styleFx.blocks.opacity); ctx.fill();
-        ctx.font = '800 ' + b.fs + 'px Montserrat, sans-serif';
+        ctx.font = '800 ' + b.fs + 'px "' + headlineFont + '", sans-serif';
         ctx.textBaseline = 'alphabetic';
         var baseline = b.y + opts.padY + b.asc;
         var cx = b.x + opts.padX;
         var spaceW = ctx.measureText(' ').width;
         for (var k = 0; k < b.line.length; k++) {
-          ctx.font = '800 ' + (b.fs * (b.line[k].s || 1)) + 'px Montserrat, sans-serif';
+          ctx.font = '800 ' + (b.fs * (b.line[k].s || 1)) + 'px "' + headlineFont + '", sans-serif';
           extrude3D(ctx, b.line[k].t, cx, baseline);
           ctx.fillStyle = b.line[k].b ? accentColor : '#ffffff';
           ctx.fillText(b.line[k].t, cx, baseline);
@@ -1791,7 +1799,7 @@
       var blocks = layoutOverlay(function (s, fs) { return measureLine(ctx, s, fs); }, src, opts);
       for (var i = 0; i < blocks.length; i++) {
         var b = blocks[i];
-        ctx.font = '800 ' + b.fs + 'px Montserrat, sans-serif';
+        ctx.font = '800 ' + b.fs + 'px "' + headlineFont + '", sans-serif';
         ctx.textBaseline = 'alphabetic';
         var baseline = b.y + opts.padY + b.asc;
         var cx = b.x + opts.padX;
@@ -1799,7 +1807,7 @@
         var isC = (thumbStyle === 'custom');
         for (var k = 0; k < b.line.length; k++) {
           var w = b.line[k];
-          ctx.font = '800 ' + (b.fs * (w.s || 1)) + 'px Montserrat, sans-serif';
+          ctx.font = '800 ' + (b.fs * (w.s || 1)) + 'px "' + headlineFont + '", sans-serif';
           extrude3D(ctx, w.t, cx, baseline);
           if (!isC || customShadow.on) {
             ctx.fillStyle = isC ? hexToRgba(customShadow.color, customShadow.strength) : 'rgba(0,0,0,0.55)';
@@ -1876,10 +1884,10 @@
       ctx.textBaseline = 'alphabetic';
       for (var i = 0; i < blocks.length; i++) {
         var b = blocks[i];
-        ctx.font = '800 ' + b.fs + 'px Montserrat, sans-serif';
+        ctx.font = '800 ' + b.fs + 'px "' + headlineFont + '", sans-serif';
         var baseline = b.y + opts.padY + b.asc, cx = b.x + opts.padX, spaceW = ctx.measureText(' ').width;
         for (var k = 0; k < b.line.length; k++) {
-          ctx.font = '800 ' + (b.fs * (b.line[k].s || 1)) + 'px Montserrat, sans-serif';
+          ctx.font = '800 ' + (b.fs * (b.line[k].s || 1)) + 'px "' + headlineFont + '", sans-serif';
           extrude3D(ctx, b.line[k].t, cx, baseline);
           ctx.fillStyle = b.line[k].b ? accentColor : '#ffffff';
           ctx.fillText(b.line[k].t, cx, baseline);
@@ -1908,10 +1916,10 @@
       ctx.textBaseline = 'alphabetic';
       for (var i = 0; i < blocks.length; i++) {
         var b = blocks[i];
-        ctx.font = '800 ' + b.fs + 'px Montserrat, sans-serif';
+        ctx.font = '800 ' + b.fs + 'px "' + headlineFont + '", sans-serif';
         var baseline = b.y + opts.padY + b.asc, cx = b.x + opts.padX, spaceW = ctx.measureText(' ').width;
         for (var k = 0; k < b.line.length; k++) {
-          ctx.font = '800 ' + (b.fs * (b.line[k].s || 1)) + 'px Montserrat, sans-serif';
+          ctx.font = '800 ' + (b.fs * (b.line[k].s || 1)) + 'px "' + headlineFont + '", sans-serif';
           extrude3D(ctx, b.line[k].t, cx, baseline);
           ctx.fillStyle = b.line[k].b ? accentColor : '#ffffff';
           ctx.fillText(b.line[k].t, cx, baseline);
@@ -2111,6 +2119,33 @@
     }
 
     // Reusable color palette: white/black + the accent set + an any-color picker.
+    var fontList = [
+      { f: 'Montserrat', label: 'Montserrat' },
+      { f: 'Anton', label: 'Anton' },
+      { f: 'Bebas Neue', label: 'Bebas Neue' },
+      { f: 'Oswald', label: 'Oswald' },
+      { f: 'Archivo Black', label: 'Archivo' },
+      { f: 'Bangers', label: 'Bangers' },
+      { f: 'Poppins', label: 'Poppins' }
+    ];
+    function buildFontPick() {
+      var el = document.getElementById('fontPick'); if (!el) return;
+      el.innerHTML = '';
+      fontList.forEach(function (it) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.textContent = it.label;
+        b.style.fontFamily = '"' + it.f + '", sans-serif';
+        b.setAttribute('data-font', it.f);
+        if (it.f === headlineFont) b.className = 'sel';
+        b.addEventListener('click', function () {
+          headlineFont = it.f;
+          Array.prototype.forEach.call(el.querySelectorAll('button'), function (c) { c.classList.remove('sel'); });
+          b.classList.add('sel');
+          drawThumb();
+        });
+        el.appendChild(b);
+      });
+    }
     function buildSwatchPick(el, getCur, onPick) {
       if (!el) return;
       el.innerHTML = '';
@@ -2661,6 +2696,7 @@
       if (d3c) d3c.addEventListener('change', function () { d3.on = d3c.checked; drawThumb(); });
       if (document.getElementById('d3Sw')) buildSwatchPick(document.getElementById('d3Sw'), function () { return d3.color; }, function (col) { d3.color = col; drawThumb(); });
     })();
+    buildFontPick();
     makeDial('dShadowStr', { get: function () { return (styleFx[thumbStyle] && styleFx[thumbStyle].strength != null) ? styleFx[thumbStyle].strength : 1; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].strength = v; }, min: 0, max: 1.5, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dShadowAngle', { get: function () { var f = styleFx[thumbStyle]; return (f && f.angle != null) ? f.angle : 0; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].angle = v; }, min: 0, max: 360, step: 5, def: 0, fmt: function (v) { return Math.round(v) + '\u00b0'; }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dShadowReach', { get: function () { var f = styleFx[thumbStyle]; return (f && f.extent != null) ? f.extent : 0.68; }, set: function (v) { if (styleFx[thumbStyle]) styleFx[thumbStyle].extent = v; }, min: 0.1, max: 1, step: 0.02, def: 0.68, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
@@ -2822,7 +2858,7 @@
     function captureCustom() {
       var sc = styleFx.custom || { on: false, strength: 1, color: '#000000' };
       return {
-        pos: thumbPos, scale: textScale, track: textTrack, threeD: { on: d3.on, depth: d3.depth, angle: d3.angle, color: d3.color }, accent: accentColor,
+        pos: thumbPos, scale: textScale, track: textTrack, font: headlineFont, threeD: { on: d3.on, depth: d3.depth, angle: d3.angle, color: d3.color }, accent: accentColor,
         border: borderStyle, borderCustom: borderCustom, badge: badgeCorner,
         textColor: customTextColor,
         outline: { on: customOutline.on, width: customOutline.width, color: customOutline.color },
@@ -2838,6 +2874,7 @@
       var ts = document.getElementById('fxShadowTextOn'); if (ts) ts.checked = !!customShadow.on;
       var so = document.getElementById('fxShadowOn'); if (so) so.checked = !!(styleFx.custom && styleFx.custom.on);
       var ft = document.getElementById('fitToggle'); if (ft) ft.checked = !freeText;
+      buildFontPick();
       var d3c = document.getElementById('d3On'); if (d3c) d3c.checked = !!d3.on;
       setDV('dD3Depth', '' + Math.round(d3.depth)); setDV('dD3Angle', Math.round(d3.angle) + '\u00b0');
       if (document.getElementById('d3Sw')) buildSwatchPick(document.getElementById('d3Sw'), function () { return d3.color; }, function (col) { d3.color = col; drawThumb(); });
@@ -2871,6 +2908,7 @@
       if (s.pos) thumbPos = s.pos;
       if (s.scale != null) textScale = s.scale;
       if (s.track != null) textTrack = s.track;
+      if (s.font) headlineFont = s.font;
       if (s.threeD) d3 = { on: !!s.threeD.on, depth: (s.threeD.depth != null ? s.threeD.depth : 8), angle: (s.threeD.angle != null ? s.threeD.angle : 45), color: s.threeD.color || '#000000' };
       if (s.accent) accentColor = s.accent;
       if (s.border) borderStyle = s.border;
@@ -2896,7 +2934,7 @@
     // All synchronous, so the screen only repaints once (no flicker on the main canvas).
     function renderLookPreview(s, mini) {
       if (!mini) return;
-      var snap = { st: thumbStyle, pos: thumbPos, sc: textScale, tr: textTrack, td: { on: d3.on, depth: d3.depth, angle: d3.angle, color: d3.color }, ac: accentColor, bd: borderStyle, bc: borderCustom, bg: badgeCorner, tc: customTextColor, ol: customOutline, sh: customShadow, cs: customCase, scr: styleFx.custom, ft: freeText };
+      var snap = { st: thumbStyle, pos: thumbPos, sc: textScale, tr: textTrack, fn: headlineFont, td: { on: d3.on, depth: d3.depth, angle: d3.angle, color: d3.color }, ac: accentColor, bd: borderStyle, bc: borderCustom, bg: badgeCorner, tc: customTextColor, ol: customOutline, sh: customShadow, cs: customCase, scr: styleFx.custom, ft: freeText };
       try {
         setCustomState(s); thumbStyle = 'custom';
         drawThumb();
@@ -2904,7 +2942,7 @@
         mc.clearRect(0, 0, mini.width, mini.height);
         if (cnv) mc.drawImage(cnv, 0, 0, 1280, 720, 0, 0, mini.width, mini.height);
       } catch (e) {}
-      thumbStyle = snap.st; thumbPos = snap.pos; textScale = snap.sc; textTrack = (snap.tr != null ? snap.tr : textTrack); d3 = (snap.td != null ? snap.td : d3); accentColor = snap.ac; borderStyle = snap.bd; borderCustom = snap.bc; badgeCorner = snap.bg; customTextColor = snap.tc; customOutline = snap.ol; customShadow = snap.sh; customCase = snap.cs; styleFx.custom = snap.scr; freeText = snap.ft;
+      thumbStyle = snap.st; thumbPos = snap.pos; textScale = snap.sc; textTrack = (snap.tr != null ? snap.tr : textTrack); headlineFont = (snap.fn != null ? snap.fn : headlineFont); d3 = (snap.td != null ? snap.td : d3); accentColor = snap.ac; borderStyle = snap.bd; borderCustom = snap.bc; badgeCorner = snap.bg; customTextColor = snap.tc; customOutline = snap.ol; customShadow = snap.sh; customCase = snap.cs; styleFx.custom = snap.scr; freeText = snap.ft;
     }
     function renderTpls() {
       var list = document.getElementById('tplList'); if (!list) return;
@@ -2975,7 +3013,7 @@
         customCase = 'none';
         styleFx.custom = { on: false, strength: 1, color: '#000000' };
         accentColor = '#0eaaf5'; borderStyle = 'brand'; borderCustom = '#f45911';
-        badgeCorner = ''; textScale = 1; textTrack = 0; d3 = { on: false, depth: 8, angle: 45, color: '#000000' }; freeText = false; thumbPos = 'bl';
+        badgeCorner = ''; textScale = 1; textTrack = 0; headlineFont = 'Montserrat'; d3 = { on: false, depth: 8, angle: 45, color: '#000000' }; freeText = false; thumbPos = 'bl';
         activeTplId = null;
         refreshCustomUI(); drawThumb(); renderTpls();
       });
