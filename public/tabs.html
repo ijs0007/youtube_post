@@ -138,6 +138,11 @@
     .framestrip img.sel { border-color:var(--accent); }
     .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
     .chip { width:auto; background:var(--chip); color:var(--text); border:1px solid var(--border); padding:6px 11px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; touch-action:none; user-select:none; -webkit-user-select:none; }
+    .chip.chipsel { outline:2px solid #fff; outline-offset:2px; }
+    .selrow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:-4px 0 14px; }
+    .txbtn { width:auto; padding:7px 13px; background:var(--chip); color:#fff; border:1px solid var(--border); border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+    .txbtn.ghost { background:transparent; color:var(--text-soft); font-weight:600; }
+    .selinfo { font-size:12.5px; color:var(--text-soft); }
     .chip.blue { background:rgba(14,170,245,.16); color:#0eaaf5; border-color:#0eaaf5; }
     .chip.scrubbing { border-color:var(--accent); color:var(--accent); box-shadow:0 0 0 2px var(--accent-soft); }
     .posgrid { display:grid; grid-template-columns:repeat(3,40px); gap:6px; margin-bottom:18px; }
@@ -525,8 +530,9 @@
       <div class="lblrow"><label for="overlayText" style="margin:0">Headline (on-screen text) — one line per row</label><span style="display:flex;gap:8px"><button id="toggleTextBtn" class="ghostbtn" type="button" title="Hide text" aria-label="Hide text"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:-2px"><path d="M1 8s2.6-4.6 7-4.6S15 8 15 8s-2.6 4.6-7 4.6S1 8 1 8z"/><circle cx="8" cy="8" r="2"/><line class="eyeslash" x1="2" y1="2" x2="14" y2="14"/></svg></button><button id="newTextBtn" class="ghostbtn" type="button">↻ New</button></span></div>
       <textarea id="overlayText" style="min-height:84px" placeholder="The punchy text on the thumbnail"></textarea>
 
-      <label>Tap a word to color it · hold &amp; drag to resize</label>
+      <label>Tap words to select · hold &amp; drag to resize</label>
       <div id="wordChips" class="chips"></div>
+      <div class="selrow"><button type="button" id="txPop" class="txbtn">Pop</button><span id="selInfo" class="selinfo"></span><button type="button" id="selClear" class="txbtn ghost" style="display:none">Clear selection</button></div>
 
       <label>Text styling</label>
       <div style="margin-bottom:14px" class="fontdrop"><span class="tt-label" style="display:block;margin-bottom:8px">Headline font</span><button type="button" id="fontTrigger" class="fontdrop-trigger"><span id="fontTriggerLabel">Montserrat</span><span class="fontdrop-caret">&#9662;</span></button><div id="fontPick" class="fontpick fontdrop-list"></div></div>
@@ -732,7 +738,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v0.92</div>
+    <div class="foot">Magic Marquee · v0.94</div>
   </div>
 
   <script>
@@ -789,6 +795,7 @@
     let selectedCastText = '';    // formatted cast block from the chosen MSM project
     let selectedCrewText = '';    // formatted crew block
     let overlayLines = [];        // [[{t,b}],...] source of truth for the text
+    var selWords = new Set();    // transient: which words ('li:wi') are selected for editing
     let overlayHidden = false;   // eye toggle: hide on-screen text (also omits it from the export)
     let frameRound = 0;           // extraction round for “more frame choices”
     let thumbFrameImg = null;     // current background Image
@@ -825,8 +832,8 @@
     let customShadow = { on: true, color: '#000000', strength: 0.55 }; // custom: text drop shadow
     let customCase = 'none';                               // custom: 'none' | 'upper' | 'title'
     let accentColor = '#0eaaf5'; // highlight color for popped words
-    var hlGrad = { on: false, c1: '#ffd60a', c2: '#ff453a', angle: 90, mid: 0.5, mode: 1, whole: false };  // HIGHLIGHT gradient (popped words)
-    var txGrad = { on: false, c1: '#ffffff', c2: '#0eaaf5', angle: 90, mid: 0.5, mode: 1, whole: false };  // TEXT-COLOR gradient (custom non-popped) - UI next pass
+    var hlGrad = { on: false, c1: '#ffd60a', c2: '#ff453a', angle: 90, mid: 0.5, mode: 1, whole: false, seeded: false };  // HIGHLIGHT gradient (popped words)
+    var txGrad = { on: false, c1: '#ffffff', c2: '#0eaaf5', angle: 90, mid: 0.5, mode: 1, whole: false, seeded: false };  // TEXT-COLOR gradient (custom non-popped) - UI next pass
     let borderStyle = 'brand'; // frame border: brand | white | black | accent | none
     let grade = { sat: 1, contrast: 1, bright: 1, sharp: 0 }; // non-destructive image adjustments
     let gradeReady = false;
@@ -2092,6 +2099,25 @@
       return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
     }
 
+    function wordKeys() { var a = []; overlayLines.forEach(function (ln, li) { ln.forEach(function (w, wi) { a.push(li + ':' + wi); }); }); return a; }
+    function selTargets() { if (selWords.size) { return Array.from(selWords).filter(function (k) { var p = k.split(':'); return overlayLines[+p[0]] && overlayLines[+p[0]][+p[1]]; }); } return wordKeys(); }
+    function updateSelInfo() {
+      var el = document.getElementById('selInfo'), cl = document.getElementById('selClear'), n = selWords.size;
+      if (el) el.textContent = n ? (n + ' selected') : 'nothing selected (Pop affects all)';
+      if (cl) cl.style.display = n ? '' : 'none';
+    }
+    (function () {
+      var pop = document.getElementById('txPop');
+      if (pop) pop.addEventListener('click', function () {
+        var t = selTargets(); if (!t.length) return;
+        var allB = t.every(function (k) { var p = k.split(':'); return overlayLines[+p[0]][+p[1]].b; });
+        t.forEach(function (k) { var p = k.split(':'); overlayLines[+p[0]][+p[1]].b = !allB; });
+        renderChips(); drawThumb();
+      });
+      var clr = document.getElementById('selClear');
+      if (clr) clr.addEventListener('click', function () { selWords.clear(); renderChips(); updateSelInfo(); });
+      updateSelInfo();
+    })();
     function styleChip(chip, on) {
       if (on) {
         chip.style.background = hexToRgba(accentColor, 0.16);
@@ -2114,6 +2140,7 @@
           chip.className = 'chip';
           chip.textContent = w.t;
           styleChip(chip, w.b);
+          if (selWords.has(li + ':' + wi)) chip.classList.add('chipsel');
           var SENS = 180, SMIN = 0.5, SMAX = 2.2;
           var downX = 0, downS = 1, lastX = 0, downY = 0, holdT = null, scrubbing = false, moved = false, suppress = false, lastTap = 0;
           function endScrub() {
@@ -2156,12 +2183,13 @@
           chip.addEventListener('pointercancel', function () { clearTimeout(holdT); endScrub(); });
           chip.addEventListener('click', function (e) {
             if (suppress) { suppress = false; e.preventDefault(); e.stopPropagation(); return; }
-            overlayLines[li][wi].b = !overlayLines[li][wi].b;
-            styleChip(chip, overlayLines[li][wi].b);
+            var key = li + ':' + wi;
+            if (selWords.has(key)) selWords.delete(key); else selWords.add(key);
+            chip.classList.toggle('chipsel', selWords.has(key));
             var now = Date.now();
-            if (now - lastTap < 320) { overlayLines[li][wi].s = 1; lastTap = 0; }
+            if (now - lastTap < 320) { overlayLines[li][wi].s = 1; lastTap = 0; drawThumb(); }
             else { lastTap = now; }
-            drawThumb();
+            updateSelInfo();
           });
           box.appendChild(chip);
         });
@@ -2601,6 +2629,7 @@
 
     document.getElementById('overlayText').addEventListener('input', function (e) {
       overlayLines = parseOverlayToLines(e.target.value, overlayLines);
+      selWords.clear(); updateSelInfo();
       renderChips();
       drawThumb();
     });
@@ -2828,11 +2857,11 @@
       var tog = document.getElementById('hlGradTog');
       if (tog) tog.addEventListener('click', function () {
         hlGrad.on = !hlGrad.on;
-        if (hlGrad.on) { hlGrad.c1 = accentColor; hlGrad.c2 = complementOf(accentColor); hlGrad.mode = 1; }
+        if (hlGrad.on && !hlGrad.seeded) { hlGrad.c1 = accentColor; hlGrad.c2 = complementOf(accentColor); hlGrad.mode = 1; hlGrad.seeded = true; }
         tog.classList.toggle('on', hlGrad.on);
         tog.textContent = hlGrad.on ? 'Gradient \u2713' : '+ Gradient';
         var p = document.getElementById('hlGradPanel'); if (p) p.style.display = hlGrad.on ? 'block' : 'none';
-        var sm1 = document.getElementById('hlGmode1'), sm2 = document.getElementById('hlGmode2'); if (sm1 && sm2) { sm1.classList.add('sel'); sm2.classList.remove('sel'); }
+        var sm1 = document.getElementById('hlGmode1'), sm2 = document.getElementById('hlGmode2'); if (sm1 && sm2) { sm1.classList.toggle('sel', hlGrad.mode !== 2); sm2.classList.toggle('sel', hlGrad.mode === 2); } var shw = document.getElementById('hlWhole'); if (shw) shw.checked = !!hlGrad.whole;
         buildAccentRow(); drawThumb();
       });
       var hwc = document.getElementById('hlWhole');
@@ -2843,11 +2872,11 @@
       var tog = document.getElementById('txGradTog');
       if (tog) tog.addEventListener('click', function () {
         txGrad.on = !txGrad.on;
-        if (txGrad.on) { txGrad.c1 = customTextColor; txGrad.c2 = complementOf(customTextColor); txGrad.mode = 1; }
+        if (txGrad.on && !txGrad.seeded) { txGrad.c1 = customTextColor; txGrad.c2 = complementOf(customTextColor); txGrad.mode = 1; txGrad.seeded = true; }
         tog.classList.toggle('on', txGrad.on);
         tog.textContent = txGrad.on ? 'Gradient \u2713' : '+ Gradient';
         var p = document.getElementById('txGradPanel'); if (p) p.style.display = txGrad.on ? 'block' : 'none';
-        var sm1 = document.getElementById('txGmode1'), sm2 = document.getElementById('txGmode2'); if (sm1 && sm2) { sm1.classList.add('sel'); sm2.classList.remove('sel'); }
+        var sm1 = document.getElementById('txGmode1'), sm2 = document.getElementById('txGmode2'); if (sm1 && sm2) { sm1.classList.toggle('sel', txGrad.mode !== 2); sm2.classList.toggle('sel', txGrad.mode === 2); } var stw = document.getElementById('txWhole'); if (stw) stw.checked = !!txGrad.whole;
         if (document.getElementById('fxTextSw')) buildSwatchPick(document.getElementById('fxTextSw'), function () { return customTextColor; }, function (c) { customTextColor = c; drawThumb(); }, txGrad);
         drawThumb();
       });
@@ -3022,7 +3051,7 @@
     function captureCustom() {
       var sc = styleFx.custom || { on: false, strength: 1, color: '#000000' };
       return {
-        pos: thumbPos, scale: textScale, track: textTrack, font: headlineFont, italic: txItalic, underline: txUnderline, strike: txStrike, thin: txThin, hlGrad: { on: hlGrad.on, c1: hlGrad.c1, c2: hlGrad.c2, angle: hlGrad.angle, mid: hlGrad.mid, mode: hlGrad.mode, whole: hlGrad.whole }, txGrad: { on: txGrad.on, c1: txGrad.c1, c2: txGrad.c2, angle: txGrad.angle, mid: txGrad.mid, mode: txGrad.mode, whole: txGrad.whole }, threeD: { on: d3.on, depth: d3.depth, angle: d3.angle, color: d3.color }, accent: accentColor,
+        pos: thumbPos, scale: textScale, track: textTrack, font: headlineFont, italic: txItalic, underline: txUnderline, strike: txStrike, thin: txThin, hlGrad: { on: hlGrad.on, c1: hlGrad.c1, c2: hlGrad.c2, angle: hlGrad.angle, mid: hlGrad.mid, mode: hlGrad.mode, whole: hlGrad.whole, seeded: hlGrad.seeded }, txGrad: { on: txGrad.on, c1: txGrad.c1, c2: txGrad.c2, angle: txGrad.angle, mid: txGrad.mid, mode: txGrad.mode, whole: txGrad.whole, seeded: txGrad.seeded }, threeD: { on: d3.on, depth: d3.depth, angle: d3.angle, color: d3.color }, accent: accentColor,
         border: borderStyle, borderCustom: borderCustom, badge: badgeCorner,
         textColor: customTextColor,
         outline: { on: customOutline.on, width: customOutline.width, color: customOutline.color },
@@ -3085,8 +3114,8 @@
       if (s.track != null) textTrack = s.track;
       if (s.font) headlineFont = s.font;
       txItalic = !!s.italic; txUnderline = !!s.underline; txStrike = !!s.strike; txThin = !!s.thin;
-      if (s.hlGrad) hlGrad = { on: !!s.hlGrad.on, c1: s.hlGrad.c1 || '#ffd60a', c2: s.hlGrad.c2 || '#ff453a', angle: s.hlGrad.angle != null ? s.hlGrad.angle : 90, mid: s.hlGrad.mid != null ? s.hlGrad.mid : 0.5, mode: s.hlGrad.mode || 1, whole: !!s.hlGrad.whole };
-      if (s.txGrad) txGrad = { on: !!s.txGrad.on, c1: s.txGrad.c1 || '#ffffff', c2: s.txGrad.c2 || '#0eaaf5', angle: s.txGrad.angle != null ? s.txGrad.angle : 90, mid: s.txGrad.mid != null ? s.txGrad.mid : 0.5, mode: s.txGrad.mode || 1, whole: !!s.txGrad.whole };
+      if (s.hlGrad) hlGrad = { on: !!s.hlGrad.on, c1: s.hlGrad.c1 || '#ffd60a', c2: s.hlGrad.c2 || '#ff453a', angle: s.hlGrad.angle != null ? s.hlGrad.angle : 90, mid: s.hlGrad.mid != null ? s.hlGrad.mid : 0.5, mode: s.hlGrad.mode || 1, whole: !!s.hlGrad.whole, seeded: !!s.hlGrad.seeded };
+      if (s.txGrad) txGrad = { on: !!s.txGrad.on, c1: s.txGrad.c1 || '#ffffff', c2: s.txGrad.c2 || '#0eaaf5', angle: s.txGrad.angle != null ? s.txGrad.angle : 90, mid: s.txGrad.mid != null ? s.txGrad.mid : 0.5, mode: s.txGrad.mode || 1, whole: !!s.txGrad.whole, seeded: !!s.txGrad.seeded };
       if (s.threeD) d3 = { on: !!s.threeD.on, depth: (s.threeD.depth != null ? s.threeD.depth : 8), angle: (s.threeD.angle != null ? s.threeD.angle : 45), color: s.threeD.color || '#000000' };
       if (s.accent) accentColor = s.accent;
       if (s.border) borderStyle = s.border;
@@ -3112,7 +3141,7 @@
     // All synchronous, so the screen only repaints once (no flicker on the main canvas).
     function renderLookPreview(s, mini) {
       if (!mini) return;
-      var snap = { st: thumbStyle, pos: thumbPos, sc: textScale, tr: textTrack, fn: headlineFont, it: txItalic, un: txUnderline, sk: txStrike, tn: txThin, hg: { on: hlGrad.on, c1: hlGrad.c1, c2: hlGrad.c2, angle: hlGrad.angle, mid: hlGrad.mid, mode: hlGrad.mode, whole: hlGrad.whole }, tg: { on: txGrad.on, c1: txGrad.c1, c2: txGrad.c2, angle: txGrad.angle, mid: txGrad.mid, mode: txGrad.mode, whole: txGrad.whole }, td: { on: d3.on, depth: d3.depth, angle: d3.angle, color: d3.color }, ac: accentColor, bd: borderStyle, bc: borderCustom, bg: badgeCorner, tc: customTextColor, ol: customOutline, sh: customShadow, cs: customCase, scr: styleFx.custom, ft: freeText };
+      var snap = { st: thumbStyle, pos: thumbPos, sc: textScale, tr: textTrack, fn: headlineFont, it: txItalic, un: txUnderline, sk: txStrike, tn: txThin, hg: { on: hlGrad.on, c1: hlGrad.c1, c2: hlGrad.c2, angle: hlGrad.angle, mid: hlGrad.mid, mode: hlGrad.mode, whole: hlGrad.whole, seeded: hlGrad.seeded }, tg: { on: txGrad.on, c1: txGrad.c1, c2: txGrad.c2, angle: txGrad.angle, mid: txGrad.mid, mode: txGrad.mode, whole: txGrad.whole, seeded: txGrad.seeded }, td: { on: d3.on, depth: d3.depth, angle: d3.angle, color: d3.color }, ac: accentColor, bd: borderStyle, bc: borderCustom, bg: badgeCorner, tc: customTextColor, ol: customOutline, sh: customShadow, cs: customCase, scr: styleFx.custom, ft: freeText };
       try {
         setCustomState(s); thumbStyle = 'custom';
         drawThumb();
@@ -3191,7 +3220,7 @@
         customCase = 'none';
         styleFx.custom = { on: false, strength: 1, color: '#000000' };
         accentColor = '#0eaaf5'; borderStyle = 'brand'; borderCustom = '#f45911';
-        badgeCorner = ''; textScale = 1; textTrack = 0; headlineFont = 'Montserrat'; txItalic = false; txUnderline = false; txStrike = false; txThin = false; hlGrad = { on: false, c1: '#ffd60a', c2: '#ff453a', angle: 90, mid: 0.5, mode: 1, whole: false }; txGrad = { on: false, c1: '#ffffff', c2: '#0eaaf5', angle: 90, mid: 0.5, mode: 1, whole: false }; d3 = { on: false, depth: 8, angle: 45, color: '#000000' }; freeText = false; thumbPos = 'bl';
+        badgeCorner = ''; textScale = 1; textTrack = 0; headlineFont = 'Montserrat'; txItalic = false; txUnderline = false; txStrike = false; txThin = false; hlGrad = { on: false, c1: '#ffd60a', c2: '#ff453a', angle: 90, mid: 0.5, mode: 1, whole: false, seeded: false }; txGrad = { on: false, c1: '#ffffff', c2: '#0eaaf5', angle: 90, mid: 0.5, mode: 1, whole: false, seeded: false }; d3 = { on: false, depth: 8, angle: 45, color: '#000000' }; freeText = false; thumbPos = 'bl';
         activeTplId = null;
         refreshCustomUI(); drawThumb(); renderTpls();
       });
