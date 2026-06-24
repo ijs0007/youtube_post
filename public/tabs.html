@@ -571,6 +571,8 @@
           <div class="dial" id="dSize" style="min-width:60px"><span class="dk">Size</span><span class="dv" id="sizeVal">100%</span></div>
           <span class="tt-label" style="margin-top:10px">Letter spacing</span>
           <div class="dial" id="dTrack" style="min-width:60px"><span class="dk">&#8596; Spacing</span><span class="dv" id="trackVal">0</span></div>
+          <span class="tt-label" style="margin-top:10px">Row spacing</span>
+          <div class="dial" id="dRowGap" style="min-width:60px"><span class="dk">&#8597; Rows</span><span class="dv" id="rowGapVal">4</span></div>
         </div>
         <div class="tt-block">
           <span class="tt-label">Logo corner</span>
@@ -754,7 +756,7 @@
 
     <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><div class="poBtns"><button type="button" class="poMode" id="poDockL" title="Dock left">Left</button><button type="button" class="poMode on" id="poFloat" title="Float">Float</button><button type="button" class="poMode" id="poDockR" title="Dock right">Right</button><button type="button" id="popoutClose" aria-label="Put preview back" title="Put back">×</button></div></div><div id="popoutGrip"></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v1.9</div>
+    <div class="foot">Magic Marquee · v2.0</div>
   </div>
 
   <script>
@@ -839,6 +841,7 @@
     let bgOffsetY = 0;
     let textScale = 1;           // global text-size multiplier
     let textTrack = 0;           // headline letter spacing in px; the auto-fit re-measures with it
+    let rowGap = 4;              // vertical gap between headline rows in px (also sets how the blocks merge)
     var d3 = { on: false, depth: 8, angle: 45, color: '#000000' };  // 3-D extrude: depth px, push direction deg, side colour
     let freeText = false;        // false = fit each row to width; true = absolute per-word sizing
     let customTextColor = '#ffffff';                       // custom: base color for non-popped words
@@ -1947,7 +1950,7 @@
     function drawOverlayClean(ctx, W, H) {
       ctx.letterSpacing = textTrack + 'px';
       if (!overlayLines.length) return;
-      var opts = { W: W, H: H, targetW: W * 0.64 * textScale, maxFont: 170 * textScale, minFont: 34 * textScale, padX: 0, padY: 4, lineGap: 4, margin: 56, anchor: thumbPos };
+      var opts = { W: W, H: H, targetW: W * 0.64 * textScale, maxFont: 170 * textScale, minFont: 34 * textScale, padX: 0, padY: 4, lineGap: rowGap, margin: 56, anchor: thumbPos };
       var src = overlayLines;
       if (thumbStyle === 'custom' && customCase !== 'none') {
         src = overlayLines.map(function (ln) { return ln.map(function (wd) { return { t: caseT(wd.t), s: wd.s, b: wd.b }; }); });
@@ -2876,6 +2879,7 @@
       document.getElementById('zoomVal').textContent = bgScale.toFixed(1) + '\u00d7';
       document.getElementById('sizeVal').textContent = Math.round(textScale * 100) + '%';
       var _tv = document.getElementById('trackVal'); if (_tv) _tv.textContent = (textTrack > 0 ? '+' : '') + textTrack;
+      var _rg = document.getElementById('rowGapVal'); if (_rg) _rg.textContent = '' + Math.round(rowGap);
       document.getElementById('satVal').textContent = Math.round(grade.sat * 100) + '%';
       document.getElementById('conVal').textContent = Math.round(grade.contrast * 100) + '%';
       document.getElementById('briVal').textContent = Math.round(grade.bright * 100) + '%';
@@ -2999,6 +3003,7 @@
     makeDial('dSha', { get: function () { return grade.sharp; }, set: function (v) { grade.sharp = v; }, min: 0, max: 1, step: 0.05, def: 0, fmt: pct, onInput: finalGrade, onChange: finalGrade });
     makeDial('dSize', { get: function () { return textScale; }, set: function (v) { textScale = v; }, min: 0.7, max: 1.4, step: 0.05, def: 1, fmt: pct, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dTrack', { get: function () { return textTrack; }, set: function (v) { textTrack = v; }, min: -8, max: 20, step: 1, def: 0, fmt: function (v) { v = Math.round(v); return v > 0 ? '+' + v : '' + v; }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+    makeDial('dRowGap', { get: function () { return rowGap; }, set: function (v) { rowGap = v; }, min: 0, max: 60, step: 2, def: 4, fmt: function (v) { return '' + Math.round(v); }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dD3Depth', { get: function () { return d3.depth; }, set: function (v) { d3.depth = v; }, min: 0, max: 20, step: 1, def: 8, fmt: function (v) { return '' + Math.round(v); }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     makeDial('dD3Angle', { get: function () { return d3.angle; }, set: function (v) { d3.angle = v; }, min: 0, max: 360, step: 5, def: 45, fmt: function (v) { return Math.round(v) + '\u00b0'; }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
     (function () {
