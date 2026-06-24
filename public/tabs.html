@@ -597,6 +597,7 @@
         </div>
       </div>
       <div id="fxBlocks" style="display:none">
+        <label id="fxBlocksOnRow" style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-bottom:10px"><input type="checkbox" id="fxBlocksOn">Text blocks</label>
         <div class="texttools">
           <div class="tt-block"><span class="tt-label">Block color</span><div id="fxBlockSw" class="swatchpick"></div></div>
           <div class="tt-block"><span class="tt-label">Block opacity</span><div class="dial" id="dBlockOp" style="min-width:88px"><span class="dk">Opacity</span><span class="dv" id="blockOpVal">100%</span></div></div>
@@ -725,7 +726,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v1.1</div>
+    <div class="foot">Magic Marquee · v1.2</div>
   </div>
 
   <script>
@@ -795,7 +796,7 @@
     let borderCustom = '#ffffff'; // custom border color
     var styleFx = {
       cinematic: { on: true, strength: 1, color: '#000000' },
-      blocks:    { color: '#000000', opacity: 1 },
+      blocks:    { on: false, color: '#000000', opacity: 1 },
       custom:    { on: false, strength: 1, color: '#000000' }
     };
     let montserratReady = false;
@@ -1879,13 +1880,18 @@
         var baseline = b.y + opts.padY + b.asc;
         var cx = b.x + opts.padX;
         var spaceW = ctx.measureText(' ').width;
+        if (styleFx.blocks.on) {
+          var _bpx = b.fs * 0.16, _bpy = b.fs * 0.10, _bgh = b.blockH - 2 * opts.padY;
+          roundRectPath(ctx, b.x - _bpx, (b.y + opts.padY) - _bpy, b.blockW + 2 * _bpx, _bgh + 2 * _bpy, Math.max(6, b.fs * 0.10));
+          ctx.fillStyle = hexToRgba(styleFx.blocks.color, styleFx.blocks.opacity); ctx.fill();
+        }
         var isC = (thumbStyle === 'custom');
         var _tbx = (isC && txGrad.on) ? (txGrad.whole ? groupBox(blocks) : [b.x, b.y, b.blockW, b.blockH]) : null; var _txg = _tbx ? makeGrad(ctx, txGrad, _tbx[0], _tbx[1], _tbx[2], _tbx[3]) : null;
         for (var k = 0; k < b.line.length; k++) {
           var w = b.line[k];
           ctx.font = hFont(b.fs * (w.s || 1), w);
           extrude3D(ctx, w.t, cx, baseline);
-          if (!isC || customShadow.on) {
+          if ((!isC || customShadow.on) && !styleFx.blocks.on) {
             ctx.fillStyle = isC ? hexToRgba(customShadow.color, customShadow.strength) : 'rgba(0,0,0,0.55)';
             ctx.fillText(w.t, cx + Math.max(2, b.fs * 0.02), baseline + Math.max(3, b.fs * 0.03));
           }
@@ -3206,13 +3212,14 @@
       var isBlocks = (thumbStyle === 'blocks');
       var sb = document.getElementById('fxShadow'), bb = document.getElementById('fxBlocks'), cc = document.getElementById('fxCustom');
       if (sb) sb.style.display = isBlocks ? 'none' : '';
-      if (bb) bb.style.display = isBlocks ? '' : 'none';
+      if (bb) bb.style.display = '';
       if (cc) cc.style.display = (thumbStyle === 'custom') ? '' : 'none';
       var tc = document.getElementById('tplCustom'); if (tc) tc.style.display = (thumbStyle === 'custom') ? '' : 'none';
-      if (isBlocks) {
-        var ov = document.getElementById('blockOpVal'); if (ov) ov.textContent = Math.round(styleFx.blocks.opacity * 100) + '%';
-        buildSwatchPick(document.getElementById('fxBlockSw'), function () { return styleFx.blocks.color; }, function (col) { styleFx.blocks.color = col; drawThumb(); });
-      } else {
+      var bon = document.getElementById('fxBlocksOn'); if (bon) bon.checked = !!styleFx.blocks.on;
+      var bonRow = document.getElementById('fxBlocksOnRow'); if (bonRow) bonRow.style.display = isBlocks ? 'none' : '';
+      var ov = document.getElementById('blockOpVal'); if (ov) ov.textContent = Math.round(styleFx.blocks.opacity * 100) + '%';
+      buildSwatchPick(document.getElementById('fxBlockSw'), function () { return styleFx.blocks.color; }, function (col) { styleFx.blocks.color = col; drawThumb(); });
+      if (!isBlocks) {
         var fx = styleFx[thumbStyle];
         var on = document.getElementById('fxShadowOn'); if (on) on.checked = !!fx.on;
         var sv = document.getElementById('shadowStrVal'); if (sv) sv.textContent = Math.round(fx.strength * 100) + '%';
@@ -3226,6 +3233,8 @@
     (function () {
       var on = document.getElementById('fxShadowOn');
       if (on) on.addEventListener('change', function () { if (styleFx[thumbStyle]) styleFx[thumbStyle].on = on.checked; drawThumb(); });
+      var bOn = document.getElementById('fxBlocksOn');
+      if (bOn) bOn.addEventListener('change', function () { styleFx.blocks.on = bOn.checked; drawThumb(); });
       syncStyleFx();
     })();
     function syncLogoGrid() {
