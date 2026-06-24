@@ -435,8 +435,7 @@
       <label id="thumbHeading" style="font-size:15px; color:var(--text); margin-bottom:12px; cursor:pointer; user-select:none; -webkit-user-select:none">Thumbnail</label>
       <div id="styleToggle" class="segmented">
         <button type="button" data-style="cinematic" class="sel">Brand</button>
-        <button type="button" data-style="blocks">Blocks</button>
-        <button type="button" data-style="custom" id="styleCustomBtn" style="display:none">Custom</button>
+        <button type="button" data-style="custom" id="styleCustomBtn">Custom</button>
       </div>
       <label>Border</label>
       <div id="borderToggle" class="segmented">
@@ -726,7 +725,7 @@
     </div>
 
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v1.2</div>
+    <div class="foot">Magic Marquee · v1.4</div>
   </div>
 
   <script>
@@ -1807,31 +1806,6 @@
     // auto-pick a complementary colour (rgb inverse, snapped to the nearest palette swatch so its ring shows)
     function complementOf(hex) { var inv = hexToRgb(hex).map(function (v) { return 255 - v; }); var best = accentColors[0], bd = 1e9; accentColors.forEach(function (c) { var r = hexToRgb(c); var d = (r[0]-inv[0])*(r[0]-inv[0]) + (r[1]-inv[1])*(r[1]-inv[1]) + (r[2]-inv[2])*(r[2]-inv[2]); if (d < bd) { bd = d; best = c; } }); return best; }
 
-    // BLOCKS style: each line on its own black rounded block, white/accent words.
-    function drawOverlayBlocks(ctx, W, H) {
-      ctx.letterSpacing = textTrack + 'px';
-      if (!overlayLines.length) return;
-      var opts = { W: W, H: H, targetW: W * 0.47 * textScale, maxFont: 108 * textScale, minFont: 26 * textScale, padX: 18, padY: 10, lineGap: 12, margin: 48, anchor: thumbPos };
-      var blocks = layoutOverlay(function (s, fs) { return measureLine(ctx, s, fs); }, overlayLines, opts);
-      for (var i = 0; i < blocks.length; i++) {
-        var b = blocks[i];
-        roundRectPath(ctx, b.x, b.y, b.blockW, b.blockH, 8);
-        ctx.fillStyle = hexToRgba(styleFx.blocks.color, styleFx.blocks.opacity); ctx.fill();
-        ctx.font = hFont(b.fs);
-        ctx.textBaseline = 'alphabetic';
-        var baseline = b.y + opts.padY + b.asc;
-        var cx = b.x + opts.padX;
-        var spaceW = ctx.measureText(' ').width;
-        for (var k = 0; k < b.line.length; k++) {
-          ctx.font = hFont(b.fs * (b.line[k].s || 1), b.line[k]);
-          extrude3D(ctx, b.line[k].t, cx, baseline);
-          ctx.fillStyle = b.line[k].c || customTextColor;
-          ctx.fillText(b.line[k].t, cx, baseline);
-          var _ww = ctx.measureText(b.line[k].t).width; if (b.line[k].u || b.line[k].k) txDeco(ctx, cx, cx + _ww, baseline, b.fs * (b.line[k].s || 1), b.line[k].c || customTextColor, b.line[k].u, b.line[k].k); cx += _ww + spaceW;
-        }
-      }
-    }
-
     // CINEMATIC style: dark gradient rising from the bottom for legibility.
     function drawScrim(ctx, W, H) {
       var fx = styleFx[thumbStyle] || styleFx.cinematic; if (!fx || !fx.on) return;
@@ -1873,6 +1847,14 @@
         src = overlayLines.map(function (ln) { return ln.map(function (wd) { return { t: caseT(wd.t), s: wd.s, b: wd.b }; }); });
       }
       var blocks = layoutOverlay(function (s, fs) { return measureLine(ctx, s, fs); }, src, opts);
+      if (styleFx.blocks.on) {
+        for (var p = 0; p < blocks.length; p++) {
+          var pb = blocks[p];
+          var _bpx = pb.fs * 0.16, _bpy = pb.fs * 0.10, _bgh = pb.blockH - 2 * opts.padY;
+          roundRectPath(ctx, pb.x - _bpx, (pb.y + opts.padY) - _bpy, pb.blockW + 2 * _bpx, _bgh + 2 * _bpy, Math.max(6, pb.fs * 0.10));
+          ctx.fillStyle = hexToRgba(styleFx.blocks.color, styleFx.blocks.opacity); ctx.fill();
+        }
+      }
       for (var i = 0; i < blocks.length; i++) {
         var b = blocks[i];
         ctx.font = hFont(b.fs);
@@ -1880,11 +1862,6 @@
         var baseline = b.y + opts.padY + b.asc;
         var cx = b.x + opts.padX;
         var spaceW = ctx.measureText(' ').width;
-        if (styleFx.blocks.on) {
-          var _bpx = b.fs * 0.16, _bpy = b.fs * 0.10, _bgh = b.blockH - 2 * opts.padY;
-          roundRectPath(ctx, b.x - _bpx, (b.y + opts.padY) - _bpy, b.blockW + 2 * _bpx, _bgh + 2 * _bpy, Math.max(6, b.fs * 0.10));
-          ctx.fillStyle = hexToRgba(styleFx.blocks.color, styleFx.blocks.opacity); ctx.fill();
-        }
         var isC = (thumbStyle === 'custom');
         var _tbx = (isC && txGrad.on) ? (txGrad.whole ? groupBox(blocks) : [b.x, b.y, b.blockW, b.blockH]) : null; var _txg = _tbx ? makeGrad(ctx, txGrad, _tbx[0], _tbx[1], _tbx[2], _tbx[3]) : null;
         for (var k = 0; k < b.line.length; k++) {
@@ -1968,19 +1945,10 @@
         if (trim.l > 0) ctx.fillRect(0, 0, trim.l * 1280, 720);
         if (trim.r > 0) ctx.fillRect(1280 - trim.r * 1280, 0, trim.r * 1280, 720);
       }
-      if (thumbStyle === 'cinematic') {
-        drawScrim(ctx, 1280, 720); if (!overlayHidden) drawOverlayClean(ctx, 1280, 720);
-        drawBorder(ctx, 1280, 720, true);
-        drawBadge(ctx, 1280, 720, badgeCorner || 'tl', true);
-      } else if (thumbStyle === 'custom') {
-        drawScrim(ctx, 1280, 720); if (!overlayHidden) drawOverlayClean(ctx, 1280, 720);
-        drawBorder(ctx, 1280, 720, true);
-        drawBadge(ctx, 1280, 720, badgeCorner || 'bl', true);
-      } else {
-        if (!overlayHidden) drawOverlayBlocks(ctx, 1280, 720);
-        drawBorder(ctx, 1280, 720, false);
-        drawBadge(ctx, 1280, 720, badgeCorner || 'bl', false);
-      }
+      drawScrim(ctx, 1280, 720);
+      if (!overlayHidden) drawOverlayClean(ctx, 1280, 720);
+      drawBorder(ctx, 1280, 720, true);
+      drawBadge(ctx, 1280, 720, badgeCorner || (thumbStyle === 'custom' ? 'bl' : 'tl'), true);
     }
 
     function overlayLinesToText(lines) {
@@ -2095,17 +2063,11 @@
     })();
     function styleChip(chip, col) {
       var _r = hexToRgb(col), _l = (0.299 * _r[0] + 0.587 * _r[1] + 0.114 * _r[2]);
-      var _chroma = Math.max(_r[0], _r[1], _r[2]) - Math.min(_r[0], _r[1], _r[2]);
-      if (_chroma < 32) {
-        var _dk = _l < 32;
-        chip.style.background = 'rgba(' + _r[0] + ',' + _r[1] + ',' + _r[2] + ',0.9)';
-        chip.style.color = _dk ? '#fff' : '#000';
-        chip.style.borderColor = _dk ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.22)';
-      } else {
-        chip.style.color = col;
-        chip.style.background = hexToRgba(col, 0.16);
-        chip.style.borderColor = hexToRgba(col, 0.55);
-      }
+      // translucent tinted chip for every color (white/black now match the colored chips);
+      // very dark colors get a light label so they stay readable on the dark chip.
+      chip.style.background = hexToRgba(col, 0.16);
+      chip.style.borderColor = hexToRgba(col, 0.55);
+      chip.style.color = (_l < 60) ? '#f5f5f7' : col;
     }
 
     function renderChips() {
@@ -2960,36 +2922,6 @@
           drawThumb();
         });
       });
-    })();
-
-    // Expert "Custom" style: a clean slate, hidden until unlocked. Triple-tap the
-    // heading to reveal it; the unlock sticks on this device.
-    (function () {
-      var btn = document.getElementById('styleCustomBtn');
-      var head = document.getElementById('thumbHeading');
-      if (!btn) return;
-      function reveal() {
-        btn.style.display = '';
-        btn.classList.add('justunlocked');
-        setTimeout(function () { btn.classList.remove('justunlocked'); }, 600);
-      }
-      try { if (localStorage.getItem('mp_customunlock') === '1') btn.style.display = ''; } catch (e) {}
-      if (head) {
-        var taps = 0, last = 0;
-        head.addEventListener('click', function () {
-          var now = Date.now();
-          taps = (now - last < 700) ? taps + 1 : 1;
-          last = now;
-          if (taps >= 3) {
-            taps = 0;
-            var show = (btn.style.display === 'none');
-            btn.style.display = show ? '' : 'none';
-            if (show) { btn.classList.add('justunlocked'); setTimeout(function () { btn.classList.remove('justunlocked'); }, 600); }
-            else if (thumbStyle === 'custom') { var cin = document.querySelector('#styleToggle button[data-style="cinematic"]'); if (cin) cin.click(); }
-            try { localStorage.setItem('mp_customunlock', show ? '1' : '0'); } catch (e) {}
-          }
-        });
-      }
     })();
 
     // Free text sizing: off = each word keeps its own size and the row grows wider
