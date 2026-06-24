@@ -293,6 +293,16 @@
     .swatch-any span { color:#fff; font-weight:700; font-size:15px; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.7); pointer-events:none; }
     #styleToggle button.justunlocked { animation:segpop .4s ease; }
     @keyframes segpop { 0% { transform:scale(.8); opacity:0; } 100% { transform:scale(1); opacity:1; } }
+    #popoutBtn { display:none; width:auto; align-items:center; gap:5px; padding:5px 13px; font-size:12px; font-weight:700; letter-spacing:.02em; background:var(--chip); color:var(--text-soft); border:1px solid rgba(255,255,255,.14); border-radius:999px; cursor:pointer; }
+    @media (min-width:980px) { #popoutBtn { display:inline-flex; } }
+    #popoutPanel { position:fixed; z-index:80; display:none; flex-direction:column; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 18px 50px rgba(0,0,0,.55); overflow:hidden; resize:horizontal; width:620px; min-width:300px; max-width:min(1100px,95vw); }
+    #popoutPanel.open { display:flex; }
+    #popoutBar { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 12px; background:var(--chip); border-bottom:1px solid var(--border); cursor:move; -webkit-user-select:none; user-select:none; touch-action:none; }
+    #popoutBar span { font-size:12.5px; font-weight:700; letter-spacing:.04em; color:var(--text-soft); }
+    #popoutClose { width:auto; background:transparent; border:none; color:var(--text-soft); font-size:20px; line-height:1; cursor:pointer; padding:0 2px; }
+    #popoutClose:hover { color:var(--text); }
+    #popoutBody { padding:10px; overflow:hidden; }
+    #popoutBody canvas { width:100%; height:auto; display:block; }
 </style>
 </head>
 <body>
@@ -444,7 +454,7 @@
         <button type="button" data-border="none">None</button>
       </div>
       <div id="borderCustomRow" class="swatchpick" style="display:none; margin-top:10px"></div>
-      <div class="thumbsticky"><canvas id="thumbCanvas" width="1280" height="720"></canvas></div><div style="display:flex;justify-content:flex-end;padding:7px 2px 0"><button type="button" id="compareBtn" style="display:none;width:auto;align-items:center;gap:5px;padding:5px 13px;font-size:12px;font-weight:700;letter-spacing:.02em;background:var(--chip);color:var(--text-soft);border:1px solid rgba(255,255,255,.14);border-radius:999px">&#8646; Edited</button></div>
+      <div class="thumbsticky"><canvas id="thumbCanvas" width="1280" height="720"></canvas></div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 2px 0"><button type="button" id="popoutBtn">&#8599; Pop out</button><button type="button" id="compareBtn" style="display:none;width:auto;align-items:center;gap:5px;padding:5px 13px;font-size:12px;font-weight:700;letter-spacing:.02em;background:var(--chip);color:var(--text-soft);border:1px solid rgba(255,255,255,.14);border-radius:999px">&#8646; Edited</button></div>
       <p class="genstatus" id="thumbStatus"></p>
 
       <label>Frame from your film</label>
@@ -730,8 +740,9 @@
       </div>
     </div>
 
+    <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><button type="button" id="popoutClose" aria-label="Dock preview">×</button></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v1.7</div>
+    <div class="foot">Magic Marquee · v1.8</div>
   </div>
 
   <script>
@@ -2696,6 +2707,67 @@
       function end() { var was = dragging; dragging = false; lockAxis = null; if (was) scheduleGrade(true); }
       canvas.addEventListener('pointerup', end);
       canvas.addEventListener('pointercancel', end);
+    })();
+
+    // Pop-out preview: float the live canvas into a draggable / resizable window (desktop only).
+    (function () {
+      var btn = document.getElementById('popoutBtn');
+      var panel = document.getElementById('popoutPanel');
+      var bar = document.getElementById('popoutBar');
+      var body = document.getElementById('popoutBody');
+      var closeb = document.getElementById('popoutClose');
+      if (!btn || !panel || !bar || !body) return;
+      var canvas = document.getElementById('thumbCanvas');
+      var homeParent = canvas ? canvas.parentNode : null;
+      var popped = false;
+
+      function popOut() {
+        if (popped || !canvas) return;
+        body.appendChild(canvas);
+        panel.classList.add('open');
+        var w = panel.offsetWidth || 620;
+        panel.style.left = Math.max(12, Math.min(window.innerWidth - w - 20, Math.round(window.innerWidth * 0.42))) + 'px';
+        panel.style.top = '80px';
+        panel.style.right = 'auto'; panel.style.bottom = 'auto';
+        btn.innerHTML = '&#8600; Dock';
+        popped = true;
+      }
+      function dock() {
+        if (!popped) return;
+        if (homeParent && canvas) homeParent.appendChild(canvas);
+        panel.classList.remove('open');
+        btn.innerHTML = '&#8599; Pop out';
+        popped = false;
+      }
+      btn.addEventListener('click', function () { if (popped) dock(); else popOut(); });
+      if (closeb) closeb.addEventListener('click', dock);
+
+      var dragging = false, sx = 0, sy = 0, startL = 0, startT = 0;
+      bar.addEventListener('pointerdown', function (e) {
+        if (e.target === closeb) return;
+        dragging = true; sx = e.clientX; sy = e.clientY;
+        var r = panel.getBoundingClientRect(); startL = r.left; startT = r.top;
+        panel.style.left = startL + 'px'; panel.style.top = startT + 'px';
+        try { bar.setPointerCapture(e.pointerId); } catch (err) {}
+      });
+      bar.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        var nl = startL + (e.clientX - sx), nt = startT + (e.clientY - sy);
+        nl = Math.max(0, Math.min(nl, window.innerWidth - 80));
+        nt = Math.max(0, Math.min(nt, window.innerHeight - 36));
+        panel.style.left = nl + 'px'; panel.style.top = nt + 'px';
+      });
+      function endDrag() { dragging = false; }
+      bar.addEventListener('pointerup', endDrag);
+      bar.addEventListener('pointercancel', endDrag);
+
+      window.addEventListener('resize', function () {
+        if (!popped) return;
+        if (window.innerWidth < 980) { dock(); return; }
+        var r = panel.getBoundingClientRect();
+        if (r.left > window.innerWidth - 80) panel.style.left = (window.innerWidth - 80) + 'px';
+        if (r.top > window.innerHeight - 36) panel.style.top = (window.innerHeight - 36) + 'px';
+      });
     })();
 
     // Tap (not drag) the preview to view it larger in a lightbox.
