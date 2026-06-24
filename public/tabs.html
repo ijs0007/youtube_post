@@ -292,6 +292,14 @@
     .swatch-any input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; border:0; padding:0; }
     .swatch-any span { color:#fff; font-weight:700; font-size:15px; line-height:1; text-shadow:0 1px 2px rgba(0,0,0,.7); pointer-events:none; }
     #styleToggle button.justunlocked { animation:segpop .4s ease; }
+    .accg { border:1px solid rgba(255,255,255,.1); border-radius:12px; margin:0 0 8px; }
+    .accg-h { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 14px; background:transparent; border:0; color:var(--text); font-size:14.5px; font-weight:700; font-family:inherit; cursor:pointer; text-align:left; }
+    .accg-h:hover { background:rgba(255,255,255,.03); }
+    .accg-t { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .accg-x { transition:transform .2s ease; flex:none; color:var(--text-soft); }
+    .accg:not(.open) .accg-x { transform:rotate(-90deg); }
+    .accg-b { padding:2px 14px 14px; }
+    .accg:not(.open) .accg-b { display:none; }
     @keyframes segpop { 0% { transform:scale(.8); opacity:0; } 100% { transform:scale(1); opacity:1; } }
     #popoutBtn { display:none; width:auto; align-items:center; gap:5px; padding:5px 13px; font-size:12px; font-weight:700; letter-spacing:.02em; background:var(--chip); color:var(--text-soft); border:1px solid rgba(255,255,255,.14); border-radius:999px; cursor:pointer; }
     @media (min-width:980px) { #popoutBtn { display:inline-flex; } }
@@ -455,16 +463,12 @@
       <div id="thumbPlaceholder" class="card placeholder"><div class="ph169"><span class="ph169-cap">16:9 preview</span></div><p class="ph-hint">Head to <b>Publish</b>, send a film, then tap <b>Make thumbnail</b> — your studio opens here.</p></div>
       <div id="thumbCard" class="card" style="display:none">
       <label id="thumbHeading" style="font-size:15px; color:var(--text); margin-bottom:12px; cursor:pointer; user-select:none; -webkit-user-select:none">Thumbnail</label>
-      <label>Border</label>
-      <div id="borderToggle" class="segmented">
-        <button type="button" data-border="brand" class="sel">Brand</button>
-        <button type="button" data-border="custom">Custom</button>
-        <button type="button" data-border="none">None</button>
-      </div>
-      <div id="borderCustomRow" class="swatchpick" style="display:none; margin-top:10px"></div>
       <div class="thumbsticky"><canvas id="thumbCanvas" width="1280" height="720"></canvas></div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 2px 0"><button type="button" id="popoutBtn">&#8599; Pop out</button><button type="button" id="compareBtn" style="display:none;width:auto;align-items:center;gap:5px;padding:5px 13px;font-size:12px;font-weight:700;letter-spacing:.02em;background:var(--chip);color:var(--text-soft);border:1px solid rgba(255,255,255,.14);border-radius:999px">&#8646; Edited</button></div>
       <p class="genstatus" id="thumbStatus"></p>
 
+      <div class="accg" data-acc="photo">
+        <button type="button" class="accg-h" aria-expanded="false"><span class="accg-t">Photo</span><svg class="accg-x" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></button>
+        <div class="accg-b">
       <label>Frame from your film</label>
       <div id="frameStrip" class="framestrip"></div>
       <div style="display:flex; gap:8px; margin:0 0 12px">
@@ -540,9 +544,11 @@
       </div>
       <button id="resetGradeBtn" class="secondary" style="margin:0 0 16px">Reset image</button>
 
-      <label>Video title</label>
-      <div class="lblrow"><span id="thumbTitleView" class="titleview">—</span><button id="newTitleBtn" class="ghostbtn" type="button">↻ New</button></div>
-
+        </div>
+      </div>
+      <div class="accg" data-acc="headline">
+        <button type="button" class="accg-h" aria-expanded="false"><span class="accg-t">Headline</span><svg class="accg-x" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></button>
+        <div class="accg-b">
       <div class="lblrow"><label for="overlayText" style="margin:0">Headline (on-screen text) — one line per row</label><span style="display:flex;gap:8px"><button id="toggleTextBtn" class="ghostbtn" type="button" title="Hide text" aria-label="Hide text"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:-2px"><path d="M1 8s2.6-4.6 7-4.6S15 8 15 8s-2.6 4.6-7 4.6S1 8 1 8z"/><circle cx="8" cy="8" r="2"/><line class="eyeslash" x1="2" y1="2" x2="14" y2="14"/></svg></button><button id="newTextBtn" class="ghostbtn" type="button">↻ New</button></span></div>
       <textarea id="overlayText" style="min-height:84px" placeholder="The punchy text on the thumbnail"></textarea>
 
@@ -570,31 +576,23 @@
           <span class="tt-label" style="margin-top:10px">Row spacing</span>
           <div class="dial" id="dRowGap" style="min-width:60px"><span class="dk">&#8597; Rows</span><span class="dv" id="rowGapVal">4</span></div>
         </div>
-        <div class="tt-block">
-          <span class="tt-label">Logo corner</span>
-          <div id="logoGrid" class="logogrid">
-            <button type="button" data-c="tl" aria-label="Top left">&#8598;</button>
-            <button type="button" data-c="tr" aria-label="Top right">&#8599;</button>
-            <button type="button" data-c="bl" aria-label="Bottom left">&#8601;</button>
-            <button type="button" data-c="br" aria-label="Bottom right">&#8600;</button>
-            <button type="button" id="logoHide" aria-label="Hide logo" title="Hide logo" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:28px;height:28px;border-radius:50%;background:var(--surface);border:1.5px solid rgba(255,255,255,.2);color:var(--text-soft);font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;z-index:2;box-shadow:0 1px 5px rgba(0,0,0,.45);cursor:pointer">&#8856;</button>
-          </div>
-        </div>
       </div>
 
       <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;margin:-4px 0 2px;cursor:pointer"><input type="checkbox" id="fitToggle" checked>Fit each row to width</label>
       <p class="hint" style="margin:0 0 14px">Off: each word keeps its own size — the row just gets wider.</p>
 
-      <label style="margin-top:2px">3-D depth</label>
-      <div id="d3panel">
-        <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-bottom:10px"><input type="checkbox" id="d3On">3-D block letters</label>
-        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
-          <div class="tt-block" style="flex:1 1 200px;min-width:0"><span class="tt-label">Side color</span><div id="d3Sw" class="swatchpick"></div></div>
-          <div class="tt-block" style="flex:0 0 auto"><span class="tt-label">Depth</span><div class="dial" id="dD3Depth" style="min-width:80px"><span class="dk">Depth</span><span class="dv" id="d3DepthVal">8</span></div></div>
-          <div class="tt-block" style="flex:0 0 auto"><span class="tt-label">Direction</span><div class="dial" id="dD3Angle" style="min-width:80px"><span class="dk">Angle</span><span class="dv" id="d3AngleVal">45&deg;</span></div></div>
+        <label style="margin:12px 0 6px">Letter case</label>
+        <div id="caseToggle" class="segmented" style="margin-bottom:4px">
+          <button type="button" data-case="none" class="sel">As typed</button>
+          <button type="button" data-case="upper">UPPERCASE</button>
+          <button type="button" data-case="lower">lowercase</button>
+          <button type="button" data-case="title">Title</button>
+        </div>
         </div>
       </div>
-
+      <div class="accg" data-acc="effects">
+        <button type="button" class="accg-h" aria-expanded="false"><span class="accg-t">Effects</span><svg class="accg-x" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></button>
+        <div class="accg-b">
       <label style="margin-top:2px">Style settings</label>
       <div id="fxShadow">
         <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-bottom:10px"><input type="checkbox" id="fxShadowOn" checked>Vignette</label>
@@ -643,13 +641,6 @@
             <p class="hint" style="margin:8px 0 0">Pick the two colors from the swatches above &mdash; <b style="color:#ff453a">red ring</b> = color 1, <b style="color:#0a84ff">blue ring</b> = color 2.</p>
           </div>
         </div>
-        <label style="margin:12px 0 6px">Letter case</label>
-        <div id="caseToggle" class="segmented" style="margin-bottom:4px">
-          <button type="button" data-case="none" class="sel">As typed</button>
-          <button type="button" data-case="upper">UPPERCASE</button>
-          <button type="button" data-case="lower">lowercase</button>
-          <button type="button" data-case="title">Title</button>
-        </div>
         <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin:12px 0 6px"><input type="checkbox" id="fxOutlineOn">Text outline</label>
         <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
           <div class="tt-block" style="flex:1 1 190px;min-width:0"><span class="tt-label">Outline color</span><div id="fxOutlineSw" class="swatchpick"></div></div>
@@ -661,6 +652,47 @@
           <div class="tt-block" style="flex:0 0 auto"><span class="tt-label">Strength</span><div class="dial" id="dTextShadowStr" style="min-width:84px"><span class="dk">Strength</span><span class="dv" id="textShadowStrVal">55%</span></div></div>
         </div>
       </div>
+      <label style="margin-top:2px">3-D depth</label>
+      <div id="d3panel">
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin-bottom:10px"><input type="checkbox" id="d3On">3-D block letters</label>
+        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          <div class="tt-block" style="flex:1 1 200px;min-width:0"><span class="tt-label">Side color</span><div id="d3Sw" class="swatchpick"></div></div>
+          <div class="tt-block" style="flex:0 0 auto"><span class="tt-label">Depth</span><div class="dial" id="dD3Depth" style="min-width:80px"><span class="dk">Depth</span><span class="dv" id="d3DepthVal">8</span></div></div>
+          <div class="tt-block" style="flex:0 0 auto"><span class="tt-label">Direction</span><div class="dial" id="dD3Angle" style="min-width:80px"><span class="dk">Angle</span><span class="dv" id="d3AngleVal">45&deg;</span></div></div>
+        </div>
+      </div>
+
+        </div>
+      </div>
+      <div class="accg" data-acc="border">
+        <button type="button" class="accg-h" aria-expanded="false"><span class="accg-t">Border</span><svg class="accg-x" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></button>
+        <div class="accg-b">
+      <div id="borderToggle" class="segmented">
+        <button type="button" data-border="brand" class="sel">Brand</button>
+        <button type="button" data-border="custom">Custom</button>
+        <button type="button" data-border="none">None</button>
+      </div>
+      <div id="borderCustomRow" class="swatchpick" style="display:none; margin-top:10px"></div>
+        </div>
+      </div>
+      <div class="accg" data-acc="badge">
+        <button type="button" class="accg-h" aria-expanded="false"><span class="accg-t">Badge</span><svg class="accg-x" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></button>
+        <div class="accg-b">
+        <div class="tt-block">
+          <span class="tt-label">Logo corner</span>
+          <div id="logoGrid" class="logogrid">
+            <button type="button" data-c="tl" aria-label="Top left">&#8598;</button>
+            <button type="button" data-c="tr" aria-label="Top right">&#8599;</button>
+            <button type="button" data-c="bl" aria-label="Bottom left">&#8601;</button>
+            <button type="button" data-c="br" aria-label="Bottom right">&#8600;</button>
+            <button type="button" id="logoHide" aria-label="Hide logo" title="Hide logo" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:28px;height:28px;border-radius:50%;background:var(--surface);border:1.5px solid rgba(255,255,255,.2);color:var(--text-soft);font-size:14px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;z-index:2;box-shadow:0 1px 5px rgba(0,0,0,.45);cursor:pointer">&#8856;</button>
+          </div>
+        </div>
+        </div>
+      </div>
+      <div class="accg" data-acc="looks">
+        <button type="button" class="accg-h" aria-expanded="false"><span class="accg-t">Looks</span><svg class="accg-x" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></button>
+        <div class="accg-b">
       <div id="tplCustom" style="display:none">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;gap:8px">
           <label style="margin:0">Saved looks</label>
@@ -678,8 +710,18 @@
         <div id="tplList" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
 
+        </div>
+      </div>
+      <div class="accg" data-acc="share">
+        <button type="button" class="accg-h" aria-expanded="false"><span class="accg-t">Share</span><svg class="accg-x" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></button>
+        <div class="accg-b">
+      <label>Video title</label>
+      <div class="lblrow"><span id="thumbTitleView" class="titleview">—</span><button id="newTitleBtn" class="ghostbtn" type="button">↻ New</button></div>
+
       <button id="setThumbBtn" disabled>Set as YouTube thumbnail</button>
       <button id="downloadThumbBtn" class="secondary" style="margin-top:8px">Download thumbnail</button>
+        </div>
+      </div>
     </div>
     </div>
 
@@ -756,7 +798,7 @@
 
     <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><div class="poBtns"><button type="button" class="poMode" id="poDockL" title="Dock left">Left</button><button type="button" class="poMode on" id="poFloat" title="Float">Float</button><button type="button" class="poMode" id="poDockR" title="Dock right">Right</button><button type="button" id="popoutClose" aria-label="Put preview back" title="Put back">×</button></div></div><div id="popoutGrip"></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v2.4</div>
+    <div class="foot">Magic Marquee · v2.6</div>
   </div>
 
   <script>
@@ -3339,12 +3381,12 @@
         var acts = document.createElement('div'); acts.style.cssText = 'display:flex;gap:4px;flex:none';
         var upd = document.createElement('button'); upd.type = 'button'; upd.textContent = 'Update'; upd.title = 'Save the current look as your Brand';
         upd.style.cssText = 'padding:5px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.05);color:#bbb;font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap';
-        upd.addEventListener('click', function (e) { e.stopPropagation(); updateBrand(); });
+        upd.addEventListener('click', function (e) { e.stopPropagation(); if (!confirm('Make the current look your Brand preset? This overwrites your current Brand.')) return; updateBrand(); });
         acts.appendChild(upd);
         if (brandEdited()) {
           var rst = document.createElement('button'); rst.type = 'button'; rst.textContent = 'Reset'; rst.title = 'Reset Brand to the channel default';
           rst.style.cssText = 'padding:5px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.14);background:transparent;color:var(--text-soft);font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap';
-          rst.addEventListener('click', function (e) { e.stopPropagation(); resetBrand(); });
+          rst.addEventListener('click', function (e) { e.stopPropagation(); if (!confirm('Reset Brand to the original default? Your customized Brand will be lost.')) return; resetBrand(); });
           acts.appendChild(rst);
         }
         row.appendChild(thumb); row.appendChild(name); row.appendChild(acts); list.appendChild(row);
@@ -3412,6 +3454,18 @@
       var ow0 = document.getElementById('tplOpenWith');
       if (ow0) ow0.addEventListener('change', function () { try { localStorage.setItem('mp_openwith', ow0.value); } catch (e) {} });
       applyOpenWith();
+    })();
+    (function () {
+      var KEY = 'mp_accgroups';
+      var DEF = { photo: true, headline: true, effects: false, border: false, badge: false, looks: false, share: false };
+      var open = null; try { open = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
+      if (!open || typeof open !== 'object') open = DEF;
+      Array.prototype.forEach.call(document.querySelectorAll('#thumbCard .accg'), function (g) {
+        var id = g.getAttribute('data-acc'); var h = g.querySelector('.accg-h');
+        function set(o) { g.classList.toggle('open', !!o); if (h) h.setAttribute('aria-expanded', o ? 'true' : 'false'); }
+        set(!!open[id]);
+        if (h) h.addEventListener('click', function () { var o = !g.classList.contains('open'); set(o); open[id] = o; try { localStorage.setItem(KEY, JSON.stringify(open)); } catch (e) {} });
+      });
     })();
 
     function logoDefault() { return 'tl'; }
