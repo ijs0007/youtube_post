@@ -303,6 +303,18 @@
     #popoutClose:hover { color:var(--text); }
     #popoutBody { padding:10px; overflow:hidden; }
     #popoutBody canvas { width:100%; height:auto; display:block; }
+    #popoutBar .poBtns { display:flex; align-items:center; gap:4px; }
+    .poMode { width:auto; background:transparent; border:1px solid transparent; color:var(--text-soft); font-size:11px; font-weight:700; letter-spacing:.02em; cursor:pointer; padding:3px 7px; border-radius:6px; }
+    .poMode.on { background:var(--accent); color:#fff; }
+    .poMode:hover:not(.on) { color:var(--text); background:rgba(255,255,255,.08); }
+    #popoutGrip { display:none; position:absolute; top:0; width:9px; height:100%; cursor:ew-resize; z-index:3; }
+    #popoutGrip:hover { background:var(--accent); opacity:.45; }
+    #popoutPanel.dockL, #popoutPanel.dockR { top:0; height:100vh; height:100dvh; border-radius:0; resize:none; max-width:none; box-shadow:0 0 44px rgba(0,0,0,.5); }
+    #popoutPanel.dockL { left:0; right:auto; }
+    #popoutPanel.dockR { right:0; left:auto; }
+    #popoutPanel.dockL #popoutGrip { display:block; right:0; }
+    #popoutPanel.dockR #popoutGrip { display:block; left:0; }
+    #popoutPanel.dockL #popoutBar, #popoutPanel.dockR #popoutBar { cursor:default; }
 </style>
 </head>
 <body>
@@ -740,9 +752,9 @@
       </div>
     </div>
 
-    <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><button type="button" id="popoutClose" aria-label="Dock preview">×</button></div><div id="popoutBody"></div></div>
+    <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><div class="poBtns"><button type="button" class="poMode" id="poDockL" title="Dock left">Left</button><button type="button" class="poMode on" id="poFloat" title="Float">Float</button><button type="button" class="poMode" id="poDockR" title="Dock right">Right</button><button type="button" id="popoutClose" aria-label="Put preview back" title="Put back">×</button></div></div><div id="popoutGrip"></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v1.8</div>
+    <div class="foot">Magic Marquee · v1.9</div>
   </div>
 
   <script>
@@ -2709,42 +2721,79 @@
       canvas.addEventListener('pointercancel', end);
     })();
 
-    // Pop-out preview: float the live canvas into a draggable / resizable window (desktop only).
+    // Pop-out preview: float the live canvas, or dock it to either side so it never covers controls.
     (function () {
       var btn = document.getElementById('popoutBtn');
       var panel = document.getElementById('popoutPanel');
       var bar = document.getElementById('popoutBar');
       var body = document.getElementById('popoutBody');
       var closeb = document.getElementById('popoutClose');
+      var grip = document.getElementById('popoutGrip');
+      var bL = document.getElementById('poDockL'), bF = document.getElementById('poFloat'), bR = document.getElementById('poDockR');
       if (!btn || !panel || !bar || !body) return;
       var canvas = document.getElementById('thumbCanvas');
       var homeParent = canvas ? canvas.parentNode : null;
-      var popped = false;
+      var popped = false, mode = 'float';
+      var fL = 60, fT = 80, fW = 620;
 
+      function clearPad() { document.body.style.paddingLeft = ''; document.body.style.paddingRight = ''; }
+      function syncPad() {
+        clearPad();
+        var w = panel.offsetWidth;
+        if (mode === 'left') document.body.style.paddingLeft = w + 'px';
+        else if (mode === 'right') document.body.style.paddingRight = w + 'px';
+      }
+      function setMode(m) {
+        if ((m === 'left' || m === 'right') && !panel.classList.contains('dockL') && !panel.classList.contains('dockR')) {
+          var rr = panel.getBoundingClientRect(); fL = rr.left; fT = rr.top; fW = panel.offsetWidth;
+        }
+        mode = m;
+        panel.classList.remove('dockL', 'dockR');
+        if (bL) bL.classList.toggle('on', m === 'left');
+        if (bF) bF.classList.toggle('on', m === 'float');
+        if (bR) bR.classList.toggle('on', m === 'right');
+        if (m === 'float') {
+          clearPad();
+          panel.style.right = 'auto'; panel.style.bottom = 'auto';
+          panel.style.left = fL + 'px'; panel.style.top = fT + 'px'; panel.style.width = fW + 'px';
+        } else {
+          panel.classList.add(m === 'left' ? 'dockL' : 'dockR');
+          var w = panel.offsetWidth;
+          if (w < 360 || w > window.innerWidth - 340) w = Math.min(640, Math.max(320, window.innerWidth - 360));
+          panel.style.left = ''; panel.style.right = ''; panel.style.top = '';
+          panel.style.width = w + 'px';
+          syncPad();
+        }
+      }
       function popOut() {
         if (popped || !canvas) return;
         body.appendChild(canvas);
         panel.classList.add('open');
-        var w = panel.offsetWidth || 620;
-        panel.style.left = Math.max(12, Math.min(window.innerWidth - w - 20, Math.round(window.innerWidth * 0.42))) + 'px';
-        panel.style.top = '80px';
-        panel.style.right = 'auto'; panel.style.bottom = 'auto';
-        btn.innerHTML = '&#8600; Dock';
+        fL = Math.max(12, Math.min(window.innerWidth - fW - 20, Math.round(window.innerWidth * 0.42)));
+        fT = 80;
+        setMode('float');
+        btn.innerHTML = '&#8600; Put back';
         popped = true;
       }
-      function dock() {
+      function putBack() {
         if (!popped) return;
+        clearPad();
         if (homeParent && canvas) homeParent.appendChild(canvas);
-        panel.classList.remove('open');
+        panel.classList.remove('open', 'dockL', 'dockR');
         btn.innerHTML = '&#8599; Pop out';
         popped = false;
       }
-      btn.addEventListener('click', function () { if (popped) dock(); else popOut(); });
-      if (closeb) closeb.addEventListener('click', dock);
+      btn.addEventListener('click', function () { if (popped) putBack(); else popOut(); });
+      if (closeb) closeb.addEventListener('click', putBack);
+      if (bL) bL.addEventListener('click', function () { setMode('left'); });
+      if (bF) bF.addEventListener('click', function () { setMode('float'); });
+      if (bR) bR.addEventListener('click', function () { setMode('right'); });
 
+      // drag to move (float only; only from the bar background or title, not the buttons)
       var dragging = false, sx = 0, sy = 0, startL = 0, startT = 0;
       bar.addEventListener('pointerdown', function (e) {
-        if (e.target === closeb) return;
+        if (mode !== 'float') return;
+        if (e.target !== bar && e.target.tagName !== 'SPAN') return;
         dragging = true; sx = e.clientX; sy = e.clientY;
         var r = panel.getBoundingClientRect(); startL = r.left; startT = r.top;
         panel.style.left = startL + 'px'; panel.style.top = startT + 'px';
@@ -2755,18 +2804,47 @@
         var nl = startL + (e.clientX - sx), nt = startT + (e.clientY - sy);
         nl = Math.max(0, Math.min(nl, window.innerWidth - 80));
         nt = Math.max(0, Math.min(nt, window.innerHeight - 36));
-        panel.style.left = nl + 'px'; panel.style.top = nt + 'px';
+        panel.style.left = nl + 'px'; panel.style.top = nt + 'px'; fL = nl; fT = nt;
       });
-      function endDrag() { dragging = false; }
+      function endDrag() { dragging = false; if (mode === 'float') fW = panel.offsetWidth; }
       bar.addEventListener('pointerup', endDrag);
       bar.addEventListener('pointercancel', endDrag);
 
+      // resize while docked: grip on the inner edge pushes the controls over
+      var rsz = false, rsx = 0, rsw = 0;
+      if (grip) {
+        grip.addEventListener('pointerdown', function (e) {
+          if (mode === 'float') return;
+          rsz = true; rsx = e.clientX; rsw = panel.offsetWidth;
+          try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+          e.preventDefault();
+        });
+        grip.addEventListener('pointermove', function (e) {
+          if (!rsz) return;
+          var dx = e.clientX - rsx;
+          var nw = (mode === 'left') ? rsw + dx : rsw - dx;
+          nw = Math.max(300, Math.min(nw, window.innerWidth - 340));
+          panel.style.width = nw + 'px';
+          syncPad();
+        });
+        function endRsz() { rsz = false; }
+        grip.addEventListener('pointerup', endRsz);
+        grip.addEventListener('pointercancel', endRsz);
+      }
+
       window.addEventListener('resize', function () {
         if (!popped) return;
-        if (window.innerWidth < 980) { dock(); return; }
-        var r = panel.getBoundingClientRect();
-        if (r.left > window.innerWidth - 80) panel.style.left = (window.innerWidth - 80) + 'px';
-        if (r.top > window.innerHeight - 36) panel.style.top = (window.innerHeight - 36) + 'px';
+        if (window.innerWidth < 980) { putBack(); return; }
+        if (mode === 'float') {
+          var r = panel.getBoundingClientRect();
+          if (r.left > window.innerWidth - 80) { fL = window.innerWidth - 80; panel.style.left = fL + 'px'; }
+          if (r.top > window.innerHeight - 36) { fT = window.innerHeight - 36; panel.style.top = fT + 'px'; }
+          fW = panel.offsetWidth;
+        } else {
+          var nw = Math.max(300, Math.min(panel.offsetWidth, window.innerWidth - 340));
+          panel.style.width = nw + 'px';
+          syncPad();
+        }
       });
     })();
 
