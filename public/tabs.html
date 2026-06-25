@@ -693,7 +693,32 @@
         <button type="button" data-border="film">Film</button>
         <button type="button" data-border="none">None</button>
       </div>
-      <div id="borderCustomRow" class="swatchpick" style="display:none; margin-top:10px"></div>
+      <div id="borderCustomPanel" style="display:none; margin-top:12px">
+        <span class="tt-label" style="display:block;margin-bottom:8px">Border color</span>
+        <div id="borderCustomRow" class="swatchpick"></div>
+        <div class="texttools" style="margin-top:12px">
+          <div class="tt-block"><span class="tt-label">Width</span><div class="dial" id="dBorderW" style="min-width:68px"><span class="dk">Width</span><span class="dv">11</span></div></div>
+          <div class="tt-block"><span class="tt-label">Corner</span><div class="dial" id="dBorderR" style="min-width:68px"><span class="dk">Radius</span><span class="dv">28</span></div></div>
+          <div class="tt-block"><span class="tt-label">Inset</span><div class="dial" id="dBorderInset" style="min-width:68px"><span class="dk">Inset</span><span class="dv">12</span></div></div>
+        </div>
+        <span class="tt-label" style="display:block;margin:14px 0 8px">Line style</span>
+        <div id="borderLineToggle" class="segmented">
+          <button type="button" data-bline="solid" class="sel">Solid</button>
+          <button type="button" data-bline="double">Double</button>
+          <button type="button" data-bline="dashed">Dashed</button>
+          <button type="button" data-bline="dotted">Dotted</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin:16px 0 8px;cursor:pointer"><input type="checkbox" id="borderGradOn">Gradient</label>
+        <div id="borderGradPanel" style="display:none">
+          <span class="tt-label" style="display:block;margin-bottom:8px">Fades to</span>
+          <div id="borderGradRow" class="swatchpick"></div>
+          <div class="texttools" style="margin-top:10px"><div class="tt-block"><span class="tt-label">Angle</span><div class="dial" id="dBorderGradAngle" style="min-width:78px"><span class="dk">Angle</span><span class="dv">90&deg;</span></div></div></div>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;margin:16px 0 8px;cursor:pointer"><input type="checkbox" id="borderGlowOn">Glow</label>
+        <div id="borderGlowPanel" style="display:none">
+          <div class="texttools"><div class="tt-block"><span class="tt-label">Size</span><div class="dial" id="dBorderGlow" style="min-width:80px"><span class="dk">Glow</span><span class="dv">18</span></div></div></div>
+        </div>
+      </div>
         </div>
       </div>
       <div class="accg" data-acc="badge">
@@ -819,7 +844,7 @@
 
     <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><div class="poBtns"><button type="button" class="poMode" id="poDockL" title="Dock left">Left</button><button type="button" class="poMode on" id="poFloat" title="Float">Float</button><button type="button" class="poMode" id="poDockR" title="Dock right">Right</button><button type="button" id="popoutClose" aria-label="Put preview back" title="Put back">×</button></div></div><div id="popoutGrip"></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v3.2</div>
+    <div class="foot">Magic Marquee · v3.3</div>
   </div>
 
   <script>
@@ -887,6 +912,10 @@
     let thumbStyle = 'custom'; // single editor (scrim store = styleFx.custom); was Brand/Custom toggle
     let badgeCorner = ''; // '' = per-style default; else tl/tr/bl/br (user override)
     let borderCustom = '#ffffff'; // custom border color
+    let borderW = 11, borderR = 28, borderInset = 12;        // custom border geometry
+    let borderLine = 'solid';                                // solid | double | dashed | dotted
+    let borderGrad = { on: false, c2: '#0eaaf5', angle: 90 };// gradient: borderCustom -> c2
+    let borderGlow = { on: false, size: 18 };                // outer glow in the border color
     var styleFx = {
       cinematic: { on: true, strength: 1, color: '#000000' },
       blocks:    { on: false, color: '#000000', opacity: 1 },
@@ -2069,9 +2098,38 @@
       }
     }
 
+    function drawCustomBorder(ctx, W, H) {
+      var inset = borderInset, r = borderR, bw = borderW;
+      var x = inset, y = inset, w = W - 2 * inset, h = H - 2 * inset;
+      if (w <= 0 || h <= 0) return;
+      ctx.save();
+      var stroke = borderCustom;
+      if (borderGrad.on) {
+        var a = borderGrad.angle * Math.PI / 180, cx = W / 2, cy = H / 2, L = Math.max(W, H) / 2;
+        var g = ctx.createLinearGradient(cx - Math.cos(a) * L, cy - Math.sin(a) * L, cx + Math.cos(a) * L, cy + Math.sin(a) * L);
+        g.addColorStop(0, borderCustom); g.addColorStop(1, borderGrad.c2); stroke = g;
+      }
+      ctx.strokeStyle = stroke; ctx.lineWidth = bw; ctx.lineJoin = 'round';
+      if (borderGlow.on) { ctx.shadowColor = borderCustom; ctx.shadowBlur = borderGlow.size; }
+      if (borderLine === 'dashed') { ctx.lineCap = 'butt'; ctx.setLineDash([bw * 2.4, bw * 1.7]); }
+      else if (borderLine === 'dotted') { ctx.lineCap = 'round'; ctx.setLineDash([0.01, bw * 2]); }
+      else { ctx.lineCap = 'butt'; ctx.setLineDash([]); }
+      if (borderLine === 'double') {
+        var gap = Math.max(2, bw * 0.5), thin = Math.max(1.5, (bw - gap) / 2);
+        ctx.lineWidth = thin;
+        roundRectPath(ctx, x, y, w, h, r); ctx.stroke();
+        var d = thin + gap;
+        roundRectPath(ctx, x + d, y + d, w - 2 * d, h - 2 * d, Math.max(0, r - d)); ctx.stroke();
+      } else {
+        roundRectPath(ctx, x, y, w, h, r); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     function drawBorder(ctx, W, H, thin) {
       if (borderStyle === 'none') return;
       if (borderStyle === 'film') { drawFilmStrip(ctx, W, H); return; }
+      if (borderStyle === 'custom') { drawCustomBorder(ctx, W, H); return; }
       var bw = thin ? 11 : 20, inset = thin ? 7 : 12, r = thin ? 28 : 36;
       var col = borderStyle === 'accent' ? accentColor
               : borderStyle === 'custom' ? borderCustom
@@ -3332,8 +3390,10 @@
       buildAccentRow();
       var bt = document.getElementById('borderToggle');
       if (bt) Array.prototype.forEach.call(bt.querySelectorAll('button'), function (b) { b.classList.toggle('sel', b.getAttribute('data-border') === borderStyle); });
+      var bcp = document.getElementById('borderCustomPanel');
+      if (bcp) bcp.style.display = (borderStyle === 'custom') ? 'block' : 'none';
       var bcr = document.getElementById('borderCustomRow');
-      if (bcr) { bcr.style.display = (borderStyle === 'custom') ? 'flex' : 'none'; buildSwatchPick(bcr, function () { return borderCustom; }, function (c) { borderCustom = c; drawThumb(); }); }
+      if (bcr) buildSwatchPick(bcr, function () { return borderCustom; }, function (c) { borderCustom = c; drawThumb(); });
       var cseg = document.getElementById('caseToggle');
       if (cseg) Array.prototype.forEach.call(cseg.querySelectorAll('button'), function (b) { b.classList.toggle('sel', b.getAttribute('data-case') === customCase); });
       buildPosGrid(); syncLogoGrid();
@@ -3587,16 +3647,36 @@
       var seg = document.getElementById('borderToggle');
       if (!seg) return;
       var customRow = document.getElementById('borderCustomRow');
-      buildSwatchPick(customRow, function () { return borderCustom; }, function (col) { borderCustom = col; drawThumb(); });
+      var panel = document.getElementById('borderCustomPanel');
+      if (customRow) buildSwatchPick(customRow, function () { return borderCustom; }, function (col) { borderCustom = col; drawThumb(); });
       Array.prototype.forEach.call(seg.querySelectorAll('button'), function (btn) {
         btn.addEventListener('click', function () {
           borderStyle = btn.getAttribute('data-border');
           Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { b.classList.remove('sel'); });
           btn.classList.add('sel');
-          if (customRow) customRow.style.display = (borderStyle === 'custom') ? 'flex' : 'none';
+          if (panel) panel.style.display = (borderStyle === 'custom') ? 'block' : 'none';
           drawThumb();
         });
       });
+      var num = function (v) { return Math.round(v) + ''; };
+      makeDial('dBorderW', { get: function () { return borderW; }, set: function (v) { borderW = v; }, min: 2, max: 48, step: 1, def: 11, fmt: num, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+      makeDial('dBorderR', { get: function () { return borderR; }, set: function (v) { borderR = v; }, min: 0, max: 140, step: 1, def: 28, fmt: num, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+      makeDial('dBorderInset', { get: function () { return borderInset; }, set: function (v) { borderInset = v; }, min: 0, max: 90, step: 1, def: 12, fmt: num, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+      makeDial('dBorderGradAngle', { get: function () { return borderGrad.angle; }, set: function (v) { borderGrad.angle = v; }, min: 0, max: 360, step: 5, def: 90, fmt: function (v) { return Math.round(v) + '\u00b0'; }, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+      makeDial('dBorderGlow', { get: function () { return borderGlow.size; }, set: function (v) { borderGlow.size = v; }, min: 2, max: 60, step: 1, def: 18, fmt: num, onInput: function () { drawThumb(); }, onChange: function () { drawThumb(); } });
+      var lseg = document.getElementById('borderLineToggle');
+      if (lseg) Array.prototype.forEach.call(lseg.querySelectorAll('button'), function (btn) {
+        btn.addEventListener('click', function () {
+          borderLine = btn.getAttribute('data-bline');
+          Array.prototype.forEach.call(lseg.querySelectorAll('button'), function (b) { b.classList.remove('sel'); });
+          btn.classList.add('sel'); drawThumb();
+        });
+      });
+      var gradOn = document.getElementById('borderGradOn'), gradPanel = document.getElementById('borderGradPanel'), gradRow = document.getElementById('borderGradRow');
+      if (gradRow) buildSwatchPick(gradRow, function () { return borderGrad.c2; }, function (col) { borderGrad.c2 = col; drawThumb(); });
+      if (gradOn) gradOn.addEventListener('change', function () { borderGrad.on = gradOn.checked; if (gradPanel) gradPanel.style.display = gradOn.checked ? 'block' : 'none'; drawThumb(); });
+      var glowOn = document.getElementById('borderGlowOn'), glowPanel = document.getElementById('borderGlowPanel');
+      if (glowOn) glowOn.addEventListener('change', function () { borderGlow.on = glowOn.checked; if (glowPanel) glowPanel.style.display = glowOn.checked ? 'block' : 'none'; drawThumb(); });
     })();
 
     setThumbBtn.addEventListener('click', function () {
