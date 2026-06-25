@@ -471,7 +471,7 @@
     </div>
 
     <div id="thumbnailView" class="panel" style="display:none">
-      <div id="thumbPlaceholder" class="card placeholder"><div class="ph169"><span class="ph169-cap">16:9 preview</span></div><p class="ph-hint">Head to <b>Publish</b>, send a film, then tap <b>Make thumbnail</b> — your studio opens here.</p></div>
+      <div id="thumbPlaceholder" class="card placeholder"><div class="ph169"><span class="ph169-cap">16:9 preview</span></div><p class="ph-hint">Send a film from <b>Publish</b> and tap <b>Make thumbnail</b> — or just make one here from your own photo.</p><button type="button" id="blankThumbBtn" class="secondary" style="margin-top:4px"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="vertical-align:-1px;margin-right:5px"><path d="M8 11V3M5 6l3-3 3 3M3 11v2h10v-2"/></svg>Upload a photo</button></div>
       <div id="thumbCard" class="card" style="display:none">
       <div class="canvaswrap" id="canvasWrap">
         <div class="canvasframe"><canvas id="thumbCanvas" width="1280" height="720"></canvas></div>
@@ -992,7 +992,7 @@
 
     <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><div class="poBtns"><button type="button" class="poMode" id="poDockL" title="Dock left">Left</button><button type="button" class="poMode on" id="poFloat" title="Float">Float</button><button type="button" class="poMode" id="poDockR" title="Dock right">Right</button><button type="button" id="popoutClose" aria-label="Put preview back" title="Put back">×</button></div></div><div id="popoutGrip"></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v3.19</div>
+    <div class="foot">Magic Marquee · v3.20</div>
   </div>
 
   <script>
@@ -3023,6 +3023,21 @@
       return l2.length ? [toLine(l1), toLine(l2)] : [toLine(l1)];
     }
 
+    function startBlankThumb() {
+      var card = document.getElementById('thumbCard');
+      var ph = document.getElementById('thumbPlaceholder');
+      if (card) card.style.display = 'block';
+      if (ph) ph.style.display = 'none';
+      showTab('thumbnail');
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+      if (!overlayLines || !overlayLines.length) overlayLines = [[{ t: 'YOUR', b: false }, { t: 'TITLE', b: true }]];
+      setThumbTitleView();
+      Promise.resolve(ensureFont()).then(function () {
+        buildPosGrid(); buildAccentRow();
+        var ov = document.getElementById('overlayText'); if (ov) ov.value = overlayLinesToText(overlayLines);
+        renderChips(); drawThumb();
+      });
+    }
     async function startThumbFlow() {
       thumbCard.style.display = 'block';
       frameRound = 0; setThumbTitleView();
@@ -3287,6 +3302,10 @@
       applyFrame(url, im);
       e.target.value = '';
     });
+    (function () {
+      var blankBtn = document.getElementById('blankThumbBtn');
+      if (blankBtn) blankBtn.addEventListener('click', function () { startBlankThumb(); var fu = document.getElementById('frameUpload'); if (fu) fu.click(); });
+    })();
 
     // Drag the background image to reposition it.
     (function () {
@@ -3797,6 +3816,13 @@
     }
     function loadTpls() { try { var a = JSON.parse(localStorage.getItem(TPL_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
     function saveTpls(a) { try { localStorage.setItem(TPL_KEY, JSON.stringify(a.slice(0, TPL_MAX))); } catch (e) {} }
+    function autoStampName(prefix) {
+      var d = new Date();
+      var mo = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
+      var h = d.getHours(), ap = h < 12 ? 'AM' : 'PM', h12 = h % 12; if (h12 === 0) h12 = 12;
+      var mm = (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+      return prefix + ' · ' + mo + ' ' + d.getDate() + ', ' + h12 + ':' + mm + ' ' + ap;
+    }
     function captureThumb() {
       var d = captureCustom();
       d.overlayLines = JSON.parse(JSON.stringify(overlayLines || []));
@@ -4310,7 +4336,8 @@
       }
       function load() { fetch('/api/logos').then(function (r) { return r.json(); }).then(function (d) { render(d && d.logos ? d.logos : []); }).catch(function () {}); }
       if (saveB) saveB.addEventListener('click', function () {
-        var payload = { name: (nameI && nameI.value) || 'Logo', logo: logo };
+        var nm = (nameI && nameI.value && nameI.value.trim()) ? nameI.value.trim() : autoStampName('Logo');
+        var payload = { name: nm, logo: logo };
         if (logoImgReady) { if (logoImgKey) payload.imgKey = logoImgKey; else if (typeof logoImg.src === 'string' && logoImg.src.indexOf('data:') === 0) payload.image = logoImg.src; }
         saveB.disabled = true; var orig = saveB.textContent; saveB.textContent = 'Saving…';
         fetch('/api/logos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -4375,7 +4402,8 @@
       }
       function load() { fetch('/api/thumbs').then(function (r) { return r.json(); }).then(function (d) { render(d && d.thumbs ? d.thumbs : []); }).catch(function () {}); }
       if (saveB) saveB.addEventListener('click', function () {
-        var payload = { name: (nameI && nameI.value) || 'Thumbnail', state: captureThumb(), photo: captureBg(), logoImage: captureLogoImg() };
+        var nm = (nameI && nameI.value && nameI.value.trim()) ? nameI.value.trim() : autoStampName('Thumbnail');
+        var payload = { name: nm, state: captureThumb(), photo: captureBg(), logoImage: captureLogoImg() };
         saveB.disabled = true; var orig = saveB.textContent; saveB.textContent = 'Saving…';
         fetch('/api/thumbs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
           .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
