@@ -16,10 +16,10 @@
 
 | App | Role | Subdomain | Repo | Module system | Accent |
 |---|---|---|---|---|---|
-| **Magic Story Maker (MSM)** | Mothership · **identity owner** · data source | `app.isaiahsmithfilms.com` | `magic-story-maker` | **ESM** | blue `#2f80ff` |
-| **Magic Reel** | Footage review for cast/crew | `reels.isaiahsmithfilms.com` | `magic-reel` | **CommonJS** | purple `#7c4dff` |
-| **Magic Marquee** | YouTube thumbnail studio + uploader | `marquee.isaiahsmithfilms.com` | `magic-marquee` | **ESM** | orange `#f45911` |
-| **Magic Credits** | End-credits builder | `credits.isaiahsmithfilms.com` | `magic-credits` | **ESM** | green |
+| **Magic Story Maker (MSM)** | Mothership · **identity owner** · data source | `app.isaiahsmithfilms.com` | `magic-story-maker` | **ESM** | purple `#7c4dff` |
+| **Magic Reel** | Footage review for cast/crew | `reels.isaiahsmithfilms.com` | `magic-reel` | **CommonJS** | orange `#f45911` |
+| **Magic Marquee** | YouTube thumbnail studio + uploader | `marquee.isaiahsmithfilms.com` | `magic-marquee` | **ESM** | blue `#2f80ff` |
+| **Magic Credits** | End-credits builder | `credits.isaiahsmithfilms.com` | `magic-credits` | **ESM** | green `#21b35a` |
 
 All are plain **Node/Express + vanilla JS — no framework, no build step.** In-place DOM updates (panels stay open during live edits).
 
