@@ -17,17 +17,25 @@
       color-scheme:light dark;
     }
     body.dark {
-      --bg:#161618; --surface:#1d1d1f; --field:#2b2b2f; --chip:#34343a;
-      --border:rgba(255,255,255,0.12); --text:#f0f0f2; --text-soft:#adadb3;
+      --bg:#1a1a1c; --surface:#252528; --field:#2e2e32; --chip:#34343a;
+      --border:rgba(255,255,255,0.14); --text:#ececec; --text-soft:#9a9a9e;
       --accent-soft:rgba(47,128,255,.22); --good:#43c48a;
     }
     * { box-sizing:border-box; }
+    /* Suite custom scrollbar — IDENTICAL across all four apps (thin, translucent, inset, rounded). */
+    *{ scrollbar-width:thin; scrollbar-color:rgba(150,150,160,.32) transparent; }
+    ::-webkit-scrollbar{ width:9px; height:9px; }
+    ::-webkit-scrollbar-track{ background:transparent; }
+    ::-webkit-scrollbar-thumb{ background:rgba(150,150,160,.30); border-radius:999px; border:2px solid transparent; background-clip:padding-box; min-height:32px; }
+    ::-webkit-scrollbar-thumb:hover{ background:rgba(170,170,180,.55); }
+    ::-webkit-scrollbar-corner{ background:transparent; }
     body {
       font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-      color:var(--text); background:var(--bg); margin:0; padding:0 16px 24px;
+      color:var(--text); background:var(--bg); margin:0; padding:0;
       -webkit-font-smoothing:antialiased;
     }
-    .wrap { max-width:540px; margin:0 auto; }
+    /* Match MSM's content column: 860px max-width, 22px side gutter, generous bottom padding. */
+    .wrap { max-width:860px; margin:0 auto; padding:0 22px 80px; }
     h1 { font-size:23px; font-weight:700; letter-spacing:-.02em; margin:0 0 3px; }
     .sub { color:var(--text-soft); margin:0 0 20px; font-size:14px; }
     /* ===== Suite header — same two-row structure as the other apps (Part 1): brand row
@@ -40,10 +48,8 @@
     .helppanel { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:16px; font-size:13px; line-height:1.55; color:var(--text-soft); }
     .helppanel b { color:var(--text); font-weight:600; }
     .card {
-      background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:14px;
-      box-shadow:0 1px 3px rgba(0,0,0,.4);
+      background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px;
     }
-    body.dark .card { background:transparent; border-color:transparent; box-shadow:none; }
     body.dark .enhancepanel { background:var(--surface); }
     body.dark .enhopt { background:var(--field); }
     .status { display:flex; align-items:center; gap:9px; font-size:14px; }
@@ -73,11 +79,14 @@
     input::placeholder, textarea::placeholder { color:var(--text-soft); }
     button {
       display:inline-block; font:inherit; font-weight:600; border:0; cursor:pointer;
-      background:var(--accent); color:#fff; padding:11px 18px; border-radius:11px;
+      background:var(--accent); color:#fff; padding:12px 22px; border-radius:10px;
       width:100%; transition:opacity .15s;
     }
+    button:hover:not(:disabled) { opacity:.9; }
     button:disabled { opacity:.5; cursor:default; }
-    button.secondary { background:var(--border); color:var(--accent); }
+    /* Secondary = transparent outline (MSM), so a disabled secondary reads as a dimmed
+       outline, not a solid gray fill. */
+    button.secondary { background:transparent; border:1px solid var(--border); color:var(--accent); }
     textarea {
       width:100%; font:inherit; color:var(--text); padding:10px 12px; border:1px solid var(--border);
       border-radius:10px; background:var(--field); margin-bottom:12px;
@@ -88,7 +97,7 @@
     .checkrow { display:flex; align-items:flex-start; gap:9px; font-size:13px; color:var(--text); font-weight:400; line-height:1.45; margin:0 0 16px; cursor:pointer; }
     .checkrow input { width:auto; margin:2px 0 0; flex:none; cursor:pointer; accent-color:var(--accent); }
     .checkrow b { font-weight:600; }
-    a.btn { display:inline-block; background:var(--accent); color:#fff; text-decoration:none; padding:11px 18px; border-radius:11px; font-weight:600; }
+    a.btn { display:inline-block; background:var(--accent); color:#fff; text-decoration:none; padding:12px 22px; border-radius:10px; font-weight:600; }
     .hint { font-size:13px; color:var(--text-soft); margin:10px 0 0; }
     .progress { display:none; margin-top:18px; }
     .progress.show { display:block; }
@@ -110,7 +119,9 @@
     .badge.private { color:#32d74b; font-weight:700; }
     .err { color:#ff453a; font-weight:600; }
     .links a { color:var(--accent); text-decoration:none; }
-    .foot { text-align:center; color:var(--text-soft); font-size:12px; margin-top:18px; }
+    .foot { text-align:center; color:var(--text-soft); font-size:12.5px; margin-top:40px; letter-spacing:.02em; }
+    .foot-brand { font-weight:600; color:var(--text); }
+    .foot-ver { font-variant-numeric:tabular-nums; opacity:.8; }
     .topbusy { position:fixed; top:10px; left:50%; transform:translateX(-50%); display:none; align-items:center; gap:9px; background:rgba(22,22,27,.96); border:1px solid var(--border); color:var(--text); padding:8px 14px; border-radius:99px; font-size:13px; font-weight:600; z-index:50; box-shadow:0 6px 20px rgba(0,0,0,.45); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); max-width:calc(100% - 24px); }
     .topbusy.show { display:inline-flex; }
     .topbusy-spin { width:15px; height:15px; border-radius:50%; border:2px solid rgba(255,255,255,.22); border-top-color:var(--accent); animation:topbusyspin .7s linear infinite; flex:none; }
@@ -213,7 +224,7 @@
     /* ---- Magic Marquee brand + theme/accent controls (ported from MSM) ---- */
     .brand { display:flex; align-items:center; font-family:"Poppins","Segoe UI",-apple-system,sans-serif; font-weight:700; font-size:26px; letter-spacing:-.01em; line-height:1.1; }
     .brand .wm { background:linear-gradient(92deg, var(--title-g1,#5fa0ff), var(--title-g2,#2f80ff) 55%, var(--title-g3,#4fc3f7)); -webkit-background-clip:text; background-clip:text; color:transparent; }
-    .msuite-switch{display:flex;align-items:center;gap:9px;font-size:14px;font-family:inherit}
+    .msuite-switch{display:inline-flex;align-items:center;gap:9px;font-size:14px;font-family:inherit}
     .theme-toggle { width:auto; flex:none; font-size:15px; line-height:1; padding:7px 10px; border-radius:9px; border:1px solid var(--border); background:transparent; color:var(--text); cursor:pointer; transition:background .15s; }
     .theme-toggle:hover { background:var(--chip); }
     /* The real header controls stay (hidden) in the DOM so the ☰ menu's proxy .click() still fires. */
@@ -236,10 +247,15 @@
       .menu-btn { top:13px; right:13px; width:32px; height:32px; }
       .fast-menu { top:50px; right:13px; }
     }
-    .msuite-switch a{color:var(--text-soft);text-decoration:none;white-space:nowrap}
-    .msuite-switch a:hover{color:var(--text)}
-    .msuite-switch a.msuite-on{color:var(--accent);font-weight:600;cursor:default}
-    .msuite-switch .msuite-dot{color:var(--text-soft);opacity:.45}
+    /* Link treatment matches MSM exactly (text color at .55 opacity; active = accent + 600).
+       The ::after ghost renders the label in bold but zero-height/hidden, so every link reserves
+       its BOLD width at all times — switching the active app no longer reflows the row (kills the
+       "shift when Marquee is selected"). */
+    .msuite-switch a{position:relative;display:inline-block;color:var(--text);opacity:.55;text-decoration:none;white-space:nowrap}
+    .msuite-switch a::after{content:attr(data-label);display:block;height:0;overflow:hidden;visibility:hidden;font-weight:600}
+    .msuite-switch a:hover{opacity:1}
+    .msuite-switch a.msuite-on{color:var(--accent);font-weight:600;opacity:1;cursor:default}
+    .msuite-switch .msuite-dot{color:var(--text);opacity:.3}
     .accent-pop { display:flex; flex-wrap:wrap; gap:9px; width:max-content; max-width:200px; margin:-10px 0 16px auto; padding:12px; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:0 10px 28px rgba(0,0,0,.32); }
     .accent-pop[hidden] { display:none; }
     .acc-sw { width:26px; height:26px; flex:none; border-radius:50%; padding:0; border:2px solid transparent; cursor:pointer; }
@@ -369,13 +385,13 @@
       <button class="menu-btn" id="menuBtn" type="button" title="Menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3.5" y1="7" x2="20.5" y2="7"/><line x1="3.5" y1="12" x2="20.5" y2="12"/><line x1="3.5" y1="17" x2="20.5" y2="17"/></svg></button>
       <div class="brand"><span class="wm">Magic Marquee</span></div>
       <nav class="msuite-switch" aria-label="Switch app">
-        <a href="https://app.isaiahsmithfilms.com" data-app="msm">Story Maker</a>
+        <a href="https://app.isaiahsmithfilms.com" data-app="msm" data-label="Story Maker">Story Maker</a>
         <span class="msuite-dot" aria-hidden="true">·</span>
-        <a href="https://reels.isaiahsmithfilms.com/studio" data-app="reel">Reel</a>
+        <a href="https://reels.isaiahsmithfilms.com/studio" data-app="reel" data-label="Reel">Reel</a>
         <span class="msuite-dot" aria-hidden="true">·</span>
-        <a href="https://marquee.isaiahsmithfilms.com" data-app="marquee">Marquee</a>
+        <a href="https://marquee.isaiahsmithfilms.com" data-app="marquee" data-label="Marquee">Marquee</a>
         <span class="msuite-dot" aria-hidden="true">·</span>
-        <a href="https://credits.isaiahsmithfilms.com" data-app="credits">Credits</a>
+        <a href="https://credits.isaiahsmithfilms.com" data-app="credits" data-label="Credits">Credits</a>
       </nav>
       <button id="helpBtn" class="theme-toggle" type="button" title="How it works" aria-label="How it works">?</button>
       <button id="accentBtn" class="theme-toggle" type="button" title="Accent color" aria-label="Accent color">🎨</button>
@@ -1032,7 +1048,7 @@
 
     <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><div class="poBtns"><button type="button" class="poMode" id="poDockL" title="Dock left">Left</button><button type="button" class="poMode on" id="poFloat" title="Float">Float</button><button type="button" class="poMode" id="poDockR" title="Dock right">Right</button><button type="button" id="popoutClose" aria-label="Put preview back" title="Put back">×</button></div></div><div id="popoutGrip"></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v3.27</div>
+    <div class="foot"><span class="foot-brand">Isaiah Smith Films</span> · Magic Marquee <span class="foot-ver">v3.28</span></div>
   </div>
 
   <script>

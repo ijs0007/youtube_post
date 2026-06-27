@@ -68,3 +68,53 @@ Applied the **same canonical header** as the other apps (`public/index.html`):
 `.star` leftovers. ⚠️ Couldn't run a live browser — please device-test on desktop + iPhone Safari
 portrait: badge renders, two-row + divider, mobile centered, ☰ → Help panel / Accent swatches /
 Dark-light (menu stays open) all work, switcher hops all four apps.
+
+---
+
+## Suite consistency pass (2026-06-27) — Marquee. v3.27 → v3.28.
+
+Aligning Marquee to MSM as the gold reference (suite-wide pass; full audit in repo-root
+`MSM-Studio-Suite/NOTES.md`). Header structure was already unified — switcher refined only to kill
+the bounce (below).
+
+**Width (the reported "doesn't stretch as wide"):** `.wrap` max-width 540 → **860** (MSM column),
+gutter moved onto `.wrap` (`padding:0 22px 80px`), `body` horizontal padding zeroed. Marquee now
+expands/contracts like the other three.
+
+**Scrollbar (was absent):** added MSM's thin/translucent custom scrollbar block.
+
+**Dark tokens → MSM values:** `--bg #1a1a1c`, `--surface #252528`, `--field #2e2e32`,
+`--border rgba(255,255,255,.14)`, `--text #ececec`, `--text-soft #9a9a9e` (were all a few points
+off). `--chip` left (app-specific, ≈ MSM `--pick-bg`).
+
+**Cards:** radius 16 → 12, removed the `box-shadow`. Removed `body.dark .card{background:transparent;
+border-color:transparent}` so dark cards show `--surface` + border like MSM (they were invisible/flat
+in dark before). NOTE: this visibly raises every card in dark mode — that's the MSM look; please eyeball.
+
+**Buttons:** base radius 11 → 10, padding 11×18 → 12×22, added the missing `:hover{opacity:.9}`.
+`a.btn` matched. **Gray disabled fixed:** `.secondary` was a solid `var(--border)` gray fill (so the
+default-disabled "Generate title & description" read as a gray box) → now transparent + 1px border +
+accent text (MSM outline), disabled reads as a dimmed outline.
+
+**Header bounce (the reported "shifts a little when selected"):** matched `.msuite-switch` to MSM
+exactly (`inline-flex`, link `color:var(--text)`+`opacity:.55`, dot `opacity:.3`) AND added a
+zero-height bold `::after` ghost (`content:attr(data-label)`) to every link so each reserves its
+**bold** width permanently — the active app going bold no longer reflows the row. Inactive links stay
+weight 400 (MSM look); added `data-label` to the four links.
+
+**Footer:** rebuilt to MSM's `.foot/.foot-brand/.foot-ver` markup — `Isaiah Smith Films · Magic
+Marquee v3.28`, 12.5px, margin-top 40px, letter-spacing .02em, bold brand, tabular version (was a
+bare inline `Magic Marquee · v3.27`, 12px). Version 3.27 → **3.28**. (Server `APP_VERSION="0.39"` is
+an internal log version, unrelated to the UI footer — left alone.)
+
+**Validation:** both inline `<script>` blocks parse ✅; `node --check server.js` ✅; tags balanced
+(div/button/nav/header/select/a) ✅. ⚠️ No live browser this session — please device-test desktop +
+iPhone Safari portrait: width at narrow→wide, dark cards (now raised), disabled "Generate" button
+(dimmed outline, not gray), switcher does NOT shift when on the Marquee host, scrollbars.
+
+**Flagged for a follow-up (not touched — risk/needs browser):** several inline-styled inputs in the
+logo/template panels (some built in JS) hardcode `color:#fff; background:rgba(255,255,255,.06);
+border:rgba(255,255,255,.14)` → invisible in light mode and bypass the tokens. Should be swapped to
+`var(--text)/var(--field)/var(--border)` in a focused pass with a browser to verify each panel.
+
+No deploy — yours to push.
