@@ -214,6 +214,23 @@
     .hbtns { display:flex; align-items:center; gap:7px; }
     .theme-toggle { width:auto; flex:none; font-size:15px; line-height:1; padding:7px 10px; border-radius:9px; border:1px solid var(--border); background:transparent; color:var(--text); cursor:pointer; transition:background .15s; }
     .theme-toggle:hover { background:var(--chip); }
+    /* Fast menu (hamburger): top-right shows only the switcher + this; Help / Accent /
+       Dark-light / (disabled) Log out live inside it. The real buttons stay in the DOM
+       (display:none) so the menu items' proxy .click() still fires. Themed with Marquee vars. */
+    .hbtns > #helpBtn, .hbtns > #accentBtn, .hbtns > #themeToggle { display:none; }
+    .menu-btn { width:auto; flex:none; font-size:17px; line-height:1; padding:7px 11px; border-radius:9px; border:1px solid var(--border); background:transparent; color:var(--text); cursor:pointer; display:inline-flex; align-items:center; transition:background .15s; }
+    .menu-btn:hover { background:var(--chip); }
+    .hbtns { position:relative; }
+    .fast-menu { position:absolute; top:calc(100% + 8px); right:0; z-index:80; min-width:200px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:7px; box-shadow:0 12px 34px rgba(0,0,0,.32); display:flex; flex-direction:column; gap:1px; }
+    .fast-menu[hidden] { display:none; }
+    .fast-menu .fm-item { font-family:inherit; font-size:14px; text-align:left; background:transparent; border:none; border-radius:8px; color:var(--text); cursor:pointer; padding:11px; }
+    .fast-menu .fm-item:hover { background:var(--chip); }
+    .fast-menu .fm-item.fm-disabled { color:var(--text-soft); opacity:.5; cursor:not-allowed; }
+    .fast-menu .fm-item.fm-disabled:hover { background:transparent; }
+    @media (max-width:560px){
+      .hrow { flex-wrap:wrap; gap:8px; }
+      .hbtns { width:100%; justify-content:space-between; }
+    }
     .msuite-switch{display:inline-flex;align-items:center;gap:9px;font-size:13px;font-family:inherit}
     .msuite-switch a{color:var(--text-soft);text-decoration:none;white-space:nowrap}
     .msuite-switch a:hover{color:var(--text)}
@@ -359,6 +376,13 @@
         <button id="helpBtn" class="theme-toggle" type="button" title="How it works" aria-label="How it works">?</button>
         <button id="accentBtn" class="theme-toggle" type="button" title="Accent color" aria-label="Accent color">🎨</button>
         <button id="themeToggle" class="theme-toggle" type="button" title="Light / dark" aria-label="Toggle theme">🌙</button>
+        <button class="menu-btn" id="menuBtn" type="button" title="Menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
+        <div class="fast-menu" id="fastMenu" hidden>
+          <button class="fm-item" type="button" data-proxy="helpBtn">❔ How it works</button>
+          <button class="fm-item" type="button" data-proxy="accentBtn">🎨 Accent color</button>
+          <button class="fm-item" id="mpThemeItem" type="button" data-proxy="themeToggle">🌙 Dark mode</button>
+          <button class="fm-item fm-disabled" type="button" disabled aria-disabled="true" title="Log out isn’t wired up yet">↩ Log out</button>
+        </div>
       </div>
     </div>
     <div id="accentPop" class="accent-pop" hidden></div>
@@ -1006,7 +1030,7 @@
 
     <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><div class="poBtns"><button type="button" class="poMode" id="poDockL" title="Dock left">Left</button><button type="button" class="poMode on" id="poFloat" title="Float">Float</button><button type="button" class="poMode" id="poDockR" title="Dock right">Right</button><button type="button" id="popoutClose" aria-label="Put preview back" title="Put back">×</button></div></div><div id="popoutGrip"></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot">Magic Marquee · v3.23</div>
+    <div class="foot">Magic Marquee · v3.24</div>
   </div>
 
   <script>
@@ -1643,6 +1667,36 @@
       var p = document.getElementById('helpPanel');
       p.style.display = (p.style.display === 'none') ? 'block' : 'none';
     });
+
+    /* ---------- Fast menu (header hamburger) ---------- */
+    (function(){
+      var btn = document.getElementById('menuBtn'), menu = document.getElementById('fastMenu');
+      if(!btn || !menu) return;
+      function closeMenu(){ menu.hidden = true; btn.setAttribute('aria-expanded','false'); }
+      function syncMenu(){
+        var ti = document.getElementById('mpThemeItem');
+        if(ti) ti.textContent = document.body.classList.contains('dark') ? '☀️ Light mode' : '🌙 Dark mode';
+      }
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        if(menu.hidden){ syncMenu(); menu.hidden = false; btn.setAttribute('aria-expanded','true'); }
+        else { closeMenu(); }
+      });
+      menu.querySelectorAll('.fm-item').forEach(function(item){
+        if(item.disabled) return;
+        item.addEventListener('click', function(e){
+          e.stopPropagation();
+          var id = item.getAttribute('data-proxy');
+          closeMenu();
+          var target = id && document.getElementById(id);
+          if(target) target.click();
+        });
+      });
+      document.addEventListener('click', function(e){
+        if(menu.hidden) return;
+        if(!menu.contains(e.target) && e.target !== btn) closeMenu();
+      });
+    })();
     document.addEventListener('click', function (e) {
       var btn = e.target.closest && e.target.closest('.tipbtn');
       if (!btn) return;
