@@ -42,7 +42,7 @@ import pg from "pg";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_VERSION = "0.41";
+const APP_VERSION = "0.42";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -951,7 +951,7 @@ async function sendErrorAlert(subject, detail) {
 function logError(where, err) {
   const msg = (err && err.stack) || (err && err.message) || String(err);
   console.error("[error] " + where + ": " + msg);
-  sendErrorAlert(where, msg);
+  return sendErrorAlert(where, msg); // returns the (rate-limited, never-throwing) alert promise so callers can race it
 }
 
 // Capture client-side errors too (best-effort; never fails the page). Public
@@ -1819,9 +1819,20 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Something went wrong. Please try again." });
 });
 
-// ---------- Process-level safety nets — log, alert, and STAY ALIVE ----------
-// A stray uncaught exception or unhandled rejection must never take the server down.
-process.on("uncaughtException", (err) => { logError("uncaughtException", err); });
+// ---------- Process-level safety nets ----------
+// unhandledRejection: log + alert, STAY ALIVE (a rejected promise is localized + lower-risk).
+// uncaughtException: after this the process may be in an undefined state, so the safe pattern
+// on Render is log -> alert -> exit(1) and let the platform restart a clean process. The alert
+// email is best-effort and RACED against a 2.5s timer so a hung send can never wedge shutdown
+// (first to finish wins). A paired rejection from the same failure won't double-email —
+// sendErrorAlert is rate-limited to 1 / 5 min and sets its timestamp synchronously.
+process.on("uncaughtException", (err) => {
+  let exited = false;
+  const bail = () => { if (exited) return; exited = true; try { process.exit(1); } catch (e) {} };
+  try { Promise.resolve(logError("uncaughtException", err)).catch(() => {}).finally(bail); }
+  catch (e) { /* fall through to the timer */ }
+  setTimeout(bail, 2500); // not unref'd — the timer must fire to force exit(1) even if the loop would otherwise drain
+});
 process.on("unhandledRejection", (reason) => { logError("unhandledRejection", reason); });
 
 initDb().catch((e) => console.error("DB init failed (templates fall back to the built-in default):", e?.message || e));

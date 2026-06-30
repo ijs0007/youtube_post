@@ -1,5 +1,17 @@
 # Magic Marquee — handoff notes
 
+## Polish Round 2 + YouTube Reconnect (2026-06-30)
+
+**Phase A — `uncaughtException` → exit-and-restart (footer v3.33 → v3.34, server APP_VERSION 0.41 → 0.42).**
+After an uncaught exception the process may be in an undefined state, so on Render the safe pattern is log →
+alert → `process.exit(1)` and let the platform auto-restart clean. The `uncaughtException` handler now logs +
+fires the rate-limited Resend alert (via `logError`, which now **returns** the alert promise — additive), then
+exits, **racing the alert against `setTimeout(bail, 2500)`** (first to settle wins; `exited` flag → exactly one
+exit). The timer is **not `unref`'d** so it deterministically forces exit(1). **`unhandledRejection` unchanged**
+(log + alert, stays alive). Double-alert prevented by the existing 1-email-per-5-min rate-limiter. Verified:
+`node --check` ✓; isolated harness proves exit(1) on fast (~35ms) and hung (~2.5s) paths; server boots,
+`/api/status` + normal requests succeed, logs clean.
+
 ## Suite Bulletproofing, Fixes & Improvements (2026-06-30) — server v0.39 → v0.40, UI v3.29 → v3.30
 
 **Repo hygiene first:** Marquee had **no `.gitattributes`** while `core.autocrlf=true` (the regex-backslash
