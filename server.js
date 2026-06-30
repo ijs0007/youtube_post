@@ -42,7 +42,7 @@ import pg from "pg";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_VERSION = "0.39";
+const APP_VERSION = "0.40";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -126,7 +126,7 @@ function msmAuthed(req) {
 }
 // Public paths that must work without a login: Google's OAuth return + status.
 function isPublicSuitePath(pth) {
-  return pth === "/oauth2callback" || pth === "/api/status";
+  return pth === "/oauth2callback" || pth === "/api/status" || pth === "/api/client-error";
 }
 function suiteAuthGate(req, res, next) {
   if (!SESSION_SECRET) return next();              // SSO not configured -> don't lock anyone out
@@ -566,7 +566,7 @@ async function whisperSrt(filePath) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 180000); // fail fast on a stalled request so withRetry can re-try
   try {
-    const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    const r = await fetchWithTimeout("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
       body: form,
@@ -824,6 +824,48 @@ async function runFrameExtraction(jobId, key, round) {
 }
 
 const app = express();
+
+// ===================== Bulletproofing: async route wrapper =====================
+// express-async-errors style. Wrap every route/middleware handler so a thrown
+// error OR a rejected promise is forwarded to the error-handling middleware
+// instead of crashing the process or hanging the request. Arity is preserved
+// (3-arg handlers vs 4-arg error handlers) so Express still routes correctly.
+// Installed before any route is registered so all of them are covered.
+function wrapHandler(fn) {
+  if (typeof fn !== "function") return fn;
+  if (fn.length >= 4) {
+    return function (err, req, res, next) {
+      try { return Promise.resolve(fn.call(this, err, req, res, next)).catch(next); }
+      catch (e) { return next(e); }
+    };
+  }
+  return function (req, res, next) {
+    try { return Promise.resolve(fn.call(this, req, res, next)).catch(next); }
+    catch (e) { return next(e); }
+  };
+}
+["get", "post", "put", "delete", "patch", "options", "head", "all", "use"].forEach(function (m) {
+  const orig = app[m].bind(app);
+  app[m] = function (...args) { return orig.apply(this, args.map((a) => (typeof a === "function" ? wrapHandler(a) : a))); };
+});
+
+// ---- Network resilience: fetch with a hard timeout (and optional one retry) ----
+// A generous default ceiling (120s) so a hung upstream can never wedge a request
+// forever, yet long-but-valid AI / image-generation calls are never cut short.
+// retryIdempotent retries ONCE on network failure/abort — only ever passed for the
+// idempotent MSM bridge GET (never for AI calls, email, or uploads). R2 (AWS SDK)
+// and YouTube (googleapis) calls keep their own SDK timeouts/retries.
+async function fetchWithTimeout(url, opts = {}, timeoutMs = 120000, retryIdempotent = false) {
+  const once = async () => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, timeoutMs);
+    try { return await fetch(url, { ...opts, signal: ctrl.signal }); }
+    finally { clearTimeout(t); }
+  };
+  try { return await once(); }
+  catch (e) { if (retryIdempotent) return await once(); throw e; }
+}
+
 app.use(suiteAuthGate); // Magic Suite SSO — verify MSM's shared login before any route or body parsing
 app.use(express.json({ limit: "12mb" })); // base64 thumbnail images can be a few MB
 
@@ -842,7 +884,7 @@ async function sendFeedbackEmail(note, room){
     '<p style="color:#555;font-size:13px;">Room: <strong>' + fbEsc(room || "—") + '</strong></p>' +
     '<div style="background:#eef4ff;border-left:3px solid #2f80ff;padding:12px 14px;border-radius:4px;white-space:pre-wrap;font-size:14px;">' + fbEsc(note) + '</div></div>';
   try {
-    const r = await fetch("https://api.resend.com/emails", { method:"POST", headers:{ "Authorization":"Bearer " + key, "Content-Type":"application/json" }, body: JSON.stringify({ from, to: [to], subject: "Magic Marquee feedback — " + (room || "app"), html }) });
+    const r = await fetchWithTimeout("https://api.resend.com/emails", { method:"POST", headers:{ "Authorization":"Bearer " + key, "Content-Type":"application/json" }, body: JSON.stringify({ from, to: [to], subject: "Magic Marquee feedback — " + (room || "app"), html }) }, 8000);
     if (!r.ok) { console.warn("[feedback] rejected by Resend:", r.status); return { ok:false }; }
     return { ok:true };
   } catch(e){ console.warn("[feedback] send failed:", e && e.message); return { ok:false }; }
@@ -855,6 +897,47 @@ app.post("/api/feedback", async (req, res) => {
     const out = await sendFeedbackEmail(note, room);
     res.json({ ok:true, emailed: !!(out && out.ok) });
   } catch(e){ console.warn("[feedback] handler error:", e && e.message); res.status(500).json({ ok:false }); }
+});
+
+// ---------- Error logging + email alerts (the practical "health" layer) ----------
+// Every server-side error is console-logged; a brief alert is emailed to Isaiah via
+// the existing Resend setup, rate-limited so an error storm can't spam the inbox or
+// burn the API quota. Fully best-effort — alerting NEVER throws.
+let _lastAlertAt = 0;
+const ALERT_MIN_GAP_MS = 5 * 60 * 1000; // at most one email alert per 5 minutes
+async function sendErrorAlert(subject, detail) {
+  try {
+    const key = process.env.RESEND_API_KEY || "", from = process.env.CALLSHEET_FROM || "";
+    if (!key || !from) return;
+    const now = Date.now();
+    if (now - _lastAlertAt < ALERT_MIN_GAP_MS) return;
+    _lastAlertAt = now;
+    const ownerEmail = from.replace(/^.*<([^>]+)>.*$/, "$1");
+    const to = (process.env.FEEDBACK_TO || ownerEmail || "").trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return;
+    const html = '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1c;line-height:1.5;">' +
+      '<p><strong>Magic Marquee — server error</strong></p>' +
+      '<div style="background:#fdecea;border-left:3px solid #d9483b;padding:12px 14px;border-radius:4px;white-space:pre-wrap;font-size:13px;">' +
+      fbEsc(subject) + "\n\n" + fbEsc(String(detail)).slice(0, 2000) + '</div></div>';
+    await fetchWithTimeout("https://api.resend.com/emails", { method:"POST", headers:{ "Authorization":"Bearer " + key, "Content-Type":"application/json" }, body: JSON.stringify({ from, to:[to], subject: "⚠️ Magic Marquee — " + subject, html }) }, 8000);
+  } catch (e) { /* never let alerting throw */ }
+}
+function logError(where, err) {
+  const msg = (err && err.stack) || (err && err.message) || String(err);
+  console.error("[error] " + where + ": " + msg);
+  sendErrorAlert(where, msg);
+}
+
+// Capture client-side errors too (best-effort; never fails the page). Public
+// (exempt from the SSO gate) so it works even if the session cookie has lapsed.
+app.post("/api/client-error", (req, res) => {
+  try {
+    const b = req.body || {};
+    const msg = String(b.message || "").slice(0, 500);
+    const src = String(b.source || "").slice(0, 300);
+    if (msg) console.error("[client-error] " + msg + (src ? " @ " + src : ""));
+  } catch (e) {}
+  res.json({ ok: true });
 });
 
 app.get("/", (req, res) => {
@@ -1128,7 +1211,7 @@ app.post("/api/metadata", async (req, res) => {
   ].join("\n");
 
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
+    const r = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -1450,7 +1533,7 @@ app.post("/api/recompose", (req, res) => {
 
 // --- Magic Story Maker bridge (server-to-server, key stays here) -------------
 async function msmFetch(pathAndQuery) {
-  const r = await fetch(MSM_BASE_URL + pathAndQuery, { headers: { "X-Export-Key": MSM_EXPORT_KEY } });
+  const r = await fetchWithTimeout(MSM_BASE_URL + pathAndQuery, { headers: { "X-Export-Key": MSM_EXPORT_KEY } }, 12000, true);
   const text = await r.text();
   let data; try { data = JSON.parse(text); } catch { data = { error: text.slice(0, 200) }; }
   return { ok: r.ok, status: r.status, data };
@@ -1512,7 +1595,7 @@ app.post("/api/thumb/text", async (req, res) => {
   const userContent = "Title: " + (t || "(none)") + "\nSynopsis: " + (s || "(none)");
 
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
+    const r = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
@@ -1626,7 +1709,7 @@ app.post("/api/thumb/enhance", async (req, res) => {
   try {
     let r;
     if (m === "genbg") {
-      r = await fetch("https://api.openai.com/v1/images/generations", {
+      r = await fetchWithTimeout("https://api.openai.com/v1/images/generations", {
         method: "POST",
         headers: { "content-type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
         body: JSON.stringify({ model: IMAGE_MODEL, prompt: instruction, size: IMAGE_SIZE, quality: IMAGE_QUALITY, n: 1 }),
@@ -1648,7 +1731,7 @@ app.post("/api/thumb/enhance", async (req, res) => {
       form.append("size", IMAGE_SIZE);
       form.append("quality", IMAGE_QUALITY);
       form.append("input_fidelity", "high");
-      r = await fetch("https://api.openai.com/v1/images/edits", {
+      r = await fetchWithTimeout("https://api.openai.com/v1/images/edits", {
         method: "POST",
         headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
         body: form,
@@ -1690,6 +1773,25 @@ app.get("/api/r2test", async (req, res) => {
     res.status(500).json({ ok: false, name: err?.name || "", error: err?.message || String(err) });
   }
 });
+
+// ---------- Global error-handling middleware — friendly, never a raw crash ----------
+// Registered after every route so it catches errors from any of them (sync throws and
+// async rejections both arrive here via the wrapper above). Logs + alerts, then returns
+// a calm message. If the response already started, defer to Express's default handler.
+app.use((err, req, res, next) => {
+  logError("route " + req.method + " " + req.path, err);
+  if (res.headersSent) return next(err);
+  const wantsHtml = req.method === "GET" && String(req.headers.accept || "").indexOf("text/html") !== -1;
+  if (wantsHtml) {
+    return res.status(500).type("html").send('<!doctype html><meta charset="utf-8"><title>Something went wrong</title><body style="font-family:-apple-system,Segoe UI,sans-serif;padding:40px;color:#333;"><h1>Something went wrong</h1><p>The app hit a snag. Please try again in a moment.</p></body>');
+  }
+  res.status(500).json({ error: "Something went wrong. Please try again." });
+});
+
+// ---------- Process-level safety nets — log, alert, and STAY ALIVE ----------
+// A stray uncaught exception or unhandled rejection must never take the server down.
+process.on("uncaughtException", (err) => { logError("uncaughtException", err); });
+process.on("unhandledRejection", (reason) => { logError("unhandledRejection", reason); });
 
 initDb().catch((e) => console.error("DB init failed (templates fall back to the built-in default):", e?.message || e));
 

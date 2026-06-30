@@ -1,5 +1,35 @@
 # Magic Marquee — handoff notes
 
+## Suite Bulletproofing, Fixes & Improvements (2026-06-30) — server v0.39 → v0.40, UI v3.29 → v3.30
+
+**Repo hygiene first:** Marquee had **no `.gitattributes`** while `core.autocrlf=true` (the regex-backslash
+hazard the house rules warn about). Added the canonical `* -text` `.gitattributes` (own commit). Verified the
+committed `server.js` keeps its backslashes intact.
+
+**Phase 1 fix:** Title descender clip — added `padding-bottom:.16em; margin-bottom:-.16em` to `.brand .wm`.
+Zero layout shift. (UI footer v3.29 → v3.30.)
+
+**Phase 2 — Bulletproofing.** All additive; no behavior change on success.
+- **Async route wrapper** installed right after `app = express()`: every handler's throw/rejection is forwarded
+  to the error middleware. Arity preserved. Pattern validated in isolation.
+- **Global error-handling middleware** (after all routes): logs + alerts, calm HTML / `{error}` JSON.
+- **Process nets:** `uncaughtException` / `unhandledRejection` log + alert and keep the server alive.
+- **Network resilience:** new `fetchWithTimeout()` wraps **every raw outbound fetch** — Anthropic (×2), OpenAI
+  transcription, OpenAI image generate/edit, Resend (8s), and the MSM bridge (12s, **retry once** — idempotent
+  GET). Default ceiling is a **generous 120s** so long-but-valid AI / image-gen calls are never cut short, but
+  a truly hung upstream is still aborted. **R2 (AWS SDK)** and **YouTube (googleapis)** calls keep their own SDK
+  timeouts/retries — deliberately not wrapped.
+- **Error logging + email alerts:** `logError()` + `sendErrorAlert()` email Isaiah via the existing Resend
+  setup (`FEEDBACK_TO`, else `CALLSHEET_FROM` address), **rate-limited to one per 5 min**. No-op if unset.
+- **Client-side net:** early inline script catches `window.onerror` + `unhandledrejection`, never blanks the
+  page, best-effort reports to **`POST /api/client-error`** (added to `isPublicSuitePath` so it works even if
+  the SSO cookie has lapsed).
+
+**Validation:** `node --check server.js` ✅; index.html inline scripts parse + tags balanced ✅; **booted the
+real server** (deps installed locally, lockfile not committed) — `/api/status`, `/`, `/api/client-error`(public,
+logged), `/api/msm/projects`(503 w/o bridge) all behave correctly. ⚠️ No live YouTube/R2 creds this session —
+spot-check a real upload + an AI metadata/enhance run.
+
 ## Phase 1 (2026-06-26) — switcher + accent. Review & push when ready.
 
 ### 1A · Two-way switcher

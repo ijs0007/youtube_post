@@ -8,6 +8,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Anton&family=Archivo+Black&family=Bangers&family=Bebas+Neue&family=Black+Ops+One&family=Luckiest+Guy&family=Montserrat:wght@500;800&family=Oswald:wght@500;700&family=Permanent+Marker&family=Poppins:wght@400;500;600;700;800&family=Russo+One&family=Titan+One&display=swap" rel="stylesheet">
   <title>Magic Marquee</title>
+  <script>
+  /* Bulletproofing — client-side global error net: logs + best-effort (throttled) reports a JS
+     error or unhandled rejection, but never lets it blank the page. Defensive; loads first. */
+  (function(){try{var lastReport=0;function report(kind,msg,src){try{var now=Date.now();if(now-lastReport<4000)return;lastReport=now;var payload=JSON.stringify({message:kind+": "+msg,source:src||""});if(navigator&&navigator.sendBeacon){navigator.sendBeacon("/api/client-error",new Blob([payload],{type:"application/json"}));}else if(window.fetch){fetch("/api/client-error",{method:"POST",headers:{"Content-Type":"application/json"},body:payload}).catch(function(){});}}catch(e){}}window.addEventListener("error",function(ev){try{report("error",(ev&&ev.message)||"script error",(ev&&ev.filename)?(ev.filename+":"+ev.lineno):"");}catch(e){}});window.addEventListener("unhandledrejection",function(ev){try{var r=ev&&ev.reason;report("unhandledrejection",(r&&(r.message||r))+"","");}catch(e){}});}catch(e){}})();
+  </script>
   <style>
     :root {
       --bg:#faf9f5; --surface:#ffffff; --field:#ffffff; --chip:#f0eee8;
