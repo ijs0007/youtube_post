@@ -445,7 +445,7 @@
         function openLogs(){
           var panel = document.getElementById('logsPanel'), body = document.getElementById('logsBody');
           if (!panel || !body) return;
-          panel.style.display = 'flex'; body.textContent = 'Loading…'; lastText = '';
+          panel.style.display = 'flex'; setLogPref('1'); body.textContent = 'Loading…'; lastText = '';
           fetch('/api/logs').then(function(r){ return r.json().then(function(j){ return { ok:r.ok, j:j }; }); }).then(function(res){
             if (!res.ok){ body.textContent = (res.j && res.j.error) ? res.j.error : 'Could not load logs.'; return; }
             var entries = (res.j && res.j.entries) || [];
@@ -454,10 +454,10 @@
             body.textContent = lastText;
           }).catch(function(){ body.textContent = 'Could not load logs.'; });
         }
-        var item = document.getElementById('logsMenuItem');
-        if (item) item.addEventListener('click', function(){ var m = document.getElementById('fastMenu'); if (m) m.hidden = true; var p = document.getElementById('logsPanel'); if (p && p.style.display === 'flex') { p.style.display = 'none'; return; } openLogs(); });
+        function setLogPref(v){ try { document.cookie = 'msuite_activity_log=' + v + '; domain=.isaiahsmithfilms.com; path=/; max-age=2592000; SameSite=Lax'; } catch(e){} } function getLogPref(){ try { var parts = (document.cookie || '').split(';'); for (var i=0;i<parts.length;i++){ var pp = parts[i].trim(); if (pp.indexOf('msuite_activity_log=') === 0) return pp.substring(('msuite_activity_log=').length); } } catch(e){} return ''; } if (getLogPref() === '1') { try { openLogs(); } catch(e){} } var item = document.getElementById('logsMenuItem');
+        if (item) item.addEventListener('click', function(){ var m = document.getElementById('fastMenu'); if (m) m.hidden = true; var p = document.getElementById('logsPanel'); if (p && p.style.display === 'flex') { p.style.display = 'none'; setLogPref('0'); return; } openLogs(); });
         var close = document.getElementById('logsCloseBtn');
-        if (close) close.addEventListener('click', function(){ var p = document.getElementById('logsPanel'); if (p) p.style.display = 'none'; });
+        if (close) close.addEventListener('click', function(){ var p = document.getElementById('logsPanel'); if (p) p.style.display = 'none'; setLogPref('0'); });
         var copy = document.getElementById('logsCopyBtn');
         if (copy) copy.addEventListener('click', function(){
           var text = lastText || (document.getElementById('logsBody') ? document.getElementById('logsBody').textContent : '');
@@ -1134,7 +1134,7 @@
 
     <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><div class="poBtns"><button type="button" class="poMode" id="poDockL" title="Dock left">Left</button><button type="button" class="poMode on" id="poFloat" title="Float">Float</button><button type="button" class="poMode" id="poDockR" title="Dock right">Right</button><button type="button" id="popoutClose" aria-label="Put preview back" title="Put back">×</button></div></div><div id="popoutGrip"></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot"><span class="foot-brand">Isaiah Smith Films</span> · Magic Marquee <span class="foot-ver">v3.43</span></div>
+    <div class="foot"><span class="foot-brand">Isaiah Smith Films</span> · Magic Marquee <span class="foot-ver">v3.44</span></div>
   </div>
 
   <script>

@@ -34,6 +34,18 @@ full-container flex-basis, squeezing the `flex:1` title to ~0 width so its text 
 buttons, so the title takes the remaining space and renders on one line; title `<b>` also got `min-width:0` for
 narrow screens. **Decision (noted):** mirrored Controls' 52% surface opacity exactly; 16px blur keeps the log
 legible. Verified: no leftover old panel style; div-balanced (323/323); glass `#logsPanel` ×1.
+
+**Phase 5 — Activity log open/closed persists across the suite via a shared cookie (footer v3.43 → v3.44;
+front-end only).** Added a small parent-domain preference cookie so the Activity log's open/closed state follows
+the user between apps. `setLogPref(v)` writes `msuite_activity_log=<v>; domain=.isaiahsmithfilms.com; path=/;
+max-age=2592000 (30d); SameSite=Lax`; `getLogPref()` reads it with **`split(';')` + `trim()` + `indexOf(...)===0`**
+(no regex per house rule; prefix-collision-safe). `openLogs()` now sets the cookie to `1`; the hamburger
+toggle-closed path and the ✕ both set it to `0`. **On load:** `if (getLogPref() === '1') openLogs();` — auto-opens
+**only** when the cookie explicitly says open, so a fresh visitor or an explicitly-closed one stays closed (no
+auto-open regression). Owner-gating still governs the data (`/api/logs` unchanged, fail-closed); the cookie only
+controls open/closed. `localStorage` NOT used (per-subdomain). **Decision (noted):** cookie is not `Secure` — works
+on the HTTPS subdomains via the `.isaiahsmithfilms.com` scope, no-ops on localhost (graceful). Verified: extracted
+log `<script>` `node --check` ✓; 12/12 logic tests pass (incl. fresh→closed, `=0`→closed, `=1`→open, prefix-collision).
 ## Scheduled-upload fix — publishAt was never sent (2026-07-01) — footer v3.39 → v3.40, APP_VERSION 0.47 → 0.48
 
 **Root cause (confirmed, not guessed):** a JS scoping bug, not the sanitizer and not the force-private override —
