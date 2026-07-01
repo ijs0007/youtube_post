@@ -11,7 +11,7 @@
   <script>
   /* Bulletproofing — client-side global error net: logs + best-effort (throttled) reports a JS
      error or unhandled rejection, but never lets it blank the page. Defensive; loads first. */
-  (function(){try{var lastReport=0;function report(kind,msg,src){try{var now=Date.now();if(now-lastReport<4000)return;lastReport=now;var payload=JSON.stringify({message:kind+": "+msg,source:src||""});if(navigator&&navigator.sendBeacon){navigator.sendBeacon("/api/client-error",new Blob([payload],{type:"application/json"}));}else if(window.fetch){fetch("/api/client-error",{method:"POST",headers:{"Content-Type":"application/json"},body:payload}).catch(function(){});}}catch(e){}}window.addEventListener("error",function(ev){try{report("error",(ev&&ev.message)||"script error",(ev&&ev.filename)?(ev.filename+":"+ev.lineno):"");}catch(e){}});window.addEventListener("unhandledrejection",function(ev){try{var r=ev&&ev.reason;report("unhandledrejection",(r&&(r.message||r))+"","");}catch(e){}});}catch(e){}})();
+  (function(){try{var lastReport=0;function report(kind,msg,src){try{if(msg&&(""+msg).indexOf("ResizeObserver loop")!==-1)return;var now=Date.now();if(now-lastReport<4000)return;lastReport=now;var payload=JSON.stringify({message:kind+": "+msg,source:src||""});if(navigator&&navigator.sendBeacon){navigator.sendBeacon("/api/client-error",new Blob([payload],{type:"application/json"}));}else if(window.fetch){fetch("/api/client-error",{method:"POST",headers:{"Content-Type":"application/json"},body:payload}).catch(function(){});}}catch(e){}}window.addEventListener("error",function(ev){try{report("error",(ev&&ev.message)||"script error",(ev&&ev.filename)?(ev.filename+":"+ev.lineno):"");}catch(e){}});window.addEventListener("unhandledrejection",function(ev){try{var r=ev&&ev.reason;report("unhandledrejection",(r&&(r.message||r))+"","");}catch(e){}});}catch(e){}})();
   </script>
   <style>
     :root {
@@ -1134,7 +1134,7 @@
 
     <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><div class="poBtns"><button type="button" class="poMode" id="poDockL" title="Dock left">Left</button><button type="button" class="poMode on" id="poFloat" title="Float">Float</button><button type="button" class="poMode" id="poDockR" title="Dock right">Right</button><button type="button" id="popoutClose" aria-label="Put preview back" title="Put back">×</button></div></div><div id="popoutGrip"></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot"><span class="foot-brand">Isaiah Smith Films</span> · Magic Marquee <span class="foot-ver">v3.44</span></div>
+    <div class="foot"><span class="foot-brand">Isaiah Smith Films</span> · Magic Marquee <span class="foot-ver">v3.45</span></div>
   </div>
 
   <script>

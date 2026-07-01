@@ -46,6 +46,12 @@ auto-open regression). Owner-gating still governs the data (`/api/logs` unchange
 controls open/closed. `localStorage` NOT used (per-subdomain). **Decision (noted):** cookie is not `Secure` — works
 on the HTTPS subdomains via the `.isaiahsmithfilms.com` scope, no-ops on localhost (graceful). Verified: extracted
 log `<script>` `node --check` ✓; 12/12 logic tests pass (incl. fresh→closed, `=0`→closed, `=1`→open, prefix-collision).
+
+**Phase 6b — filter benign ResizeObserver-loop noise from the log (footer v3.44 → v3.45).** Added `if (msg &&
+(""+msg).indexOf("ResizeObserver loop") !== -1) return;` at the top of the client-error net's `report()` so the
+benign "ResizeObserver loop completed…/limit exceeded" browser quirk never reaches the Activity log. `indexOf`, no
+regex (house rule). (6a's `querySelectorAll`-on-null bug is MSM-only — confirmed the pattern isn't present here.)
+Verified: extracted net `node --check` ✓; filter present ×1; 6/6 filter logic tests pass.
 ## Scheduled-upload fix — publishAt was never sent (2026-07-01) — footer v3.39 → v3.40, APP_VERSION 0.47 → 0.48
 
 **Root cause (confirmed, not guessed):** a JS scoping bug, not the sanitizer and not the force-private override —
