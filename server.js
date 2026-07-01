@@ -42,7 +42,7 @@ import pg from "pg";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_VERSION = "0.49";
+const APP_VERSION = "0.50";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -530,14 +530,12 @@ function sanitizeUploadOpts(b) {
   // Playlist: a YouTube playlist id (PL…/UU…/etc). Empty = don't add to any playlist.
   const playlist = (typeof b.playlist === "string" && /^[A-Za-z0-9_-]{12,64}$/.test(b.playlist.trim())) ? b.playlist.trim() : "";
   // Upload-options toggles. Defaults preserve today's behavior EXACTLY when unset: not-for-kids,
-  // comments on, notify subscribers, embeddable. Made-for-Kids (COPPA) is true ONLY on an explicit
-  // choice — never silently defaulted to true. `comments` is carried for completeness but cannot be
-  // applied via videos.insert (see transferToYouTube note); it's kept so nothing is silently lost.
+  // notify subscribers, embeddable. Made-for-Kids (COPPA) is true ONLY on an explicit choice —
+  // never silently defaulted to true.
   const kids = (b.kids === true || b.kids === "yes" || b.kids === "true");
-  const comments = !(b.comments === false || b.comments === "no" || b.comments === "false");
   const notify = !(b.notify === false || b.notify === "no" || b.notify === "false");
   const embeddable = !(b.embeddable === false || b.embeddable === "no" || b.embeddable === "false");
-  return { privacy, license, category, lang, tags, scheduleAt, playlist, kids, comments, notify, embeddable };
+  return { privacy, license, category, lang, tags, scheduleAt, playlist, kids, notify, embeddable };
 }
 
 async function transferToYouTube(jobId, key, title, description, opts) {
@@ -566,8 +564,8 @@ async function transferToYouTube(jobId, key, title, description, opts) {
     if (o.lang) { snippet.defaultLanguage = o.lang; snippet.defaultAudioLanguage = o.lang; }
     // Made-for-Kids (COPPA): reflects the user's explicit toggle (was previously hardcoded false).
     // Embeddable: honors the toggle (YouTube defaults true, which is also our unset default).
-    // NOTE: per-video comment enable/disable is NOT settable via videos.insert on the Data API v3
-    // (it's a channel default / Studio setting), so o.comments is intentionally not sent here.
+    // (Per-video comment enable/disable isn't settable via videos.insert on the Data API v3 — it's a
+    // channel/Studio setting — so Marquee deliberately has no Comments control.)
     const status = { privacyStatus: o.privacy, license: o.license, selfDeclaredMadeForKids: o.kids, embeddable: o.embeddable };
     // Scheduled publish: YouTube IGNORES status.publishAt unless privacyStatus is "private", so when a
     // (validated, future) schedule time is set we FORCE private — the video then auto-goes-public at that

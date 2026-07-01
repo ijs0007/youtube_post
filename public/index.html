@@ -1088,11 +1088,6 @@
           <span class="optval" id="optKidsVal">No</span>
         </div>
 
-        <div class="optrow optrow-tap" id="optCommentsRow" role="button" tabindex="0">
-          <span class="optlabel">Comments</span>
-          <span class="optval" id="optCommentsVal">On</span>
-        </div>
-
         <div class="optrow">
           <span class="optlabel">License</span>
           <select id="optLicense" class="optsel"><option value="youtube">Standard</option><option value="creativeCommon">Creative Commons</option></select>
@@ -1134,7 +1129,7 @@
 
     <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><div class="poBtns"><button type="button" class="poMode" id="poDockL" title="Dock left">Left</button><button type="button" class="poMode on" id="poFloat" title="Float">Float</button><button type="button" class="poMode" id="poDockR" title="Dock right">Right</button><button type="button" id="popoutClose" aria-label="Put preview back" title="Put back">×</button></div></div><div id="popoutGrip"></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot"><span class="foot-brand">Isaiah Smith Films</span> · Magic Marquee <span class="foot-ver">v3.46</span></div>
+    <div class="foot"><span class="foot-brand">Isaiah Smith Films</span> · Magic Marquee <span class="foot-ver">v3.47</span></div>
   </div>
 
   <script>
@@ -1723,22 +1718,21 @@
     // top-level functions — see the SAME variable instead of an out-of-scope one that's always undefined
     // (that was the bug: a schedule time was set in the UI but never reached the outgoing request).
     var getSchedule;
-    // Same shared-scope fix for the four Upload-Options toggles: they were saved to localStorage but
+    // Same shared-scope fix for the three Upload-Options toggles: they were saved to localStorage but
     // read via variables LOCAL to initUploadOptions(), so readUploadOpts() (this scope) never saw them
     // and they never reached the transfer payload ("saved locally but never sent"). Declaring them here
     // — assigned once inside initUploadOptions() — lets readUploadOpts() send the live values.
-    var getKids, getComments, getNotify, getEmbed;
+    var getKids, getNotify, getEmbed;
     // Read the live Upload Options (privacy, category, tags, license, language) so they
     // ride along with the transfer. Defensive: any missing control just yields ''/default
     // and the server falls back to the safe private/category-1 behavior.
     function readUploadOpts() {
       var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
       var opts = { privacy: g('optPrivacy') || 'private', category: g('optCategory') || '1', tags: g('optTags') || '', license: g('optLicense') || 'youtube', lang: g('optLang') || '', playlist: g('optPlaylist') || '' };
-      // Made-for-Kids / comments / notify-subscribers / embeddable — read the live toggles (defensive:
-      // if a toggle isn't bound yet, fall back to today's safe defaults). Made-for-Kids (COPPA) is "No"
-      // (not for kids) unless the user explicitly picked Yes; the server re-honors the same rule.
+      // Made-for-Kids / notify-subscribers / embeddable — read the live toggles (defensive: if a toggle
+      // isn't bound yet, fall back to today's safe defaults). Made-for-Kids (COPPA) is "No" (not for
+      // kids) unless the user explicitly picked Yes; the server re-honors the same rule.
       opts.kids = (typeof getKids === 'function') ? !!getKids() : false;
-      opts.comments = (typeof getComments === 'function') ? !!getComments() : true;
       opts.notify = (typeof getNotify === 'function') ? !!getNotify() : true;
       opts.embeddable = (typeof getEmbed === 'function') ? !!getEmbed() : true;
       // Schedule: only when the toggle is On AND a valid future time is picked. Convert the local
@@ -5034,8 +5028,8 @@
         flashT = setTimeout(function () { statusEl.textContent = ''; }, 1400);
       }
 
-      // getKids/getComments/getNotify/getEmbed are declared at the shared top-level scope (next to
-      // getSchedule) so readUploadOpts() can send them; initUploadOptions() only ASSIGNS them (below).
+      // getKids/getNotify/getEmbed are declared at the shared top-level scope (next to getSchedule) so
+      // readUploadOpts() can send them; initUploadOptions() only ASSIGNS them (below).
       function save() {
         var data = {
           privacy: gv('optPrivacy', 'private'),
@@ -5044,7 +5038,6 @@
           category: gv('optCategory', '1'),
           tags: gv('optTags', ''),
           kids: getKids ? getKids() : false,
-          comments: getComments ? getComments() : true,
           license: gv('optLicense', 'youtube'),
           lang: gv('optLang', ''),
           notify: getNotify ? getNotify() : true,
@@ -5085,7 +5078,6 @@
       if (schedNote) schedNote.style.display = d.scheduleOn ? 'block' : 'none';
 
       getKids = bindToggle('optKidsRow', 'optKidsVal', (d.kids === true || d.kids === 'yes'), 'Yes', 'No');
-      getComments = bindToggle('optCommentsRow', 'optCommentsVal', d.comments !== false, 'On', 'Off');
       getNotify = bindToggle('optNotifyRow', 'optNotifyVal', d.notify !== false, 'Yes', 'No');
       getEmbed = bindToggle('optEmbedRow', 'optEmbedVal', d.embeddable !== false, 'On', 'Off');
 

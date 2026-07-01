@@ -1,5 +1,21 @@
 # Magic Marquee — handoff notes
 
+## Polish Round 4 (2026-07-01)
+
+**Phase 1 — removed the Comments toggle from Upload Options (footer v3.46 → v3.47, server APP_VERSION 0.49 → 0.50).**
+Round 3 confirmed per-video comment enable/disable is **not settable via YouTube Data API v3 `videos.insert`**
+(channel/Studio setting), so the "Comments" toggle was a dead control that misled. Removed it end-to-end:
+- **Markup:** deleted the `#optCommentsRow` `.optrow` (label "Comments" + `#optCommentsVal`) from the Upload
+  Options tab — clean sibling removal, no layout gap (div count 323 → 322).
+- **Client JS:** dropped `getComments` from the shared top-level `var` list, removed `opts.comments` from
+  `readUploadOpts()`, removed the `comments:` field from `save()`'s localStorage payload, removed the
+  `getComments = bindToggle('optCommentsRow', …)` binding, and updated the "four toggles"/comment copy to "three".
+- **Server JS:** `sanitizeUploadOpts()` no longer reads `b.comments` or returns a `comments` field; updated the
+  transfer-status comment (it never sent comments anyway, so nothing behavioral changed).
+- No help-text/"How It Works" copy mentioned comment control (grep-confirmed), so nothing to prune there.
+Verified: no leftover `optComments`/`getComments`/`opts.comments`/`const comments` refs; `node --check` server.js ✓
++ main inline `<script>` ✓; div-balanced (322/322); no dup IDs.
+
 ## Polish Round 3 (2026-07-01)
 
 **Phase 2 — How It Works "?" hamburger icon → accent color (footer v3.40 → v3.41).** The hamburger "How It
