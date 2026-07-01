@@ -421,13 +421,14 @@
         <button class="fm-item fm-disabled" type="button" disabled aria-disabled="true" title="Log out isn’t wired up yet">↩ Log out</button>
       </div>
     </header>
-    <div id="logsPanel" style="display:none;position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:9000;width:min(820px,94vw);max-height:82vh;flex-direction:column;overflow:hidden;background:color-mix(in srgb, var(--surface) 52%, transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid color-mix(in srgb, var(--border) 70%, transparent);border-radius:12px;box-shadow:0 14px 38px rgba(0,0,0,0.4)">
-      <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)">
+    <style>#logsBody .logentry{margin-bottom:12px}#logsBody .logentry:last-child{margin-bottom:0}#logsBody .logmeta{color:var(--text-soft)}#logsBody .logmsg{color:var(--text)}</style>
+  <div id="logsPanel" style="display:none;position:fixed;top:50px;left:50%;transform:translateX(-50%);z-index:9000;width:min(820px,94vw);max-height:90vh;flex-direction:column;overflow:hidden;resize:both;min-width:300px;min-height:170px;max-width:96vw;background:color-mix(in srgb, var(--surface) 52%, transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid color-mix(in srgb, var(--border) 70%, transparent);border-radius:12px;box-shadow:0 14px 38px rgba(0,0,0,0.4)">
+      <div id="logsHeader" style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:move;user-select:none;-webkit-user-select:none;touch-action:none">
         <b style="flex:1;min-width:0;color:var(--text);font-size:15px">Activity log <span style="font-weight:400;color:var(--text-soft);font-size:12.5px">— recent activity, owner-only, secrets redacted</span></b>
         <button type="button" id="logsCopyBtn" style="font:inherit;font-size:13px;border:1px solid var(--border);background:transparent;color:var(--text);border-radius:8px;padding:6px 12px;cursor:pointer;flex:0 0 auto;width:auto">Copy all</button>
         <button type="button" id="logsCloseBtn" aria-label="Close" style="background:none;border:none;color:var(--text-soft);font-size:18px;cursor:pointer;line-height:1;flex:0 0 auto;width:auto">&#10005;</button>
       </div>
-      <div id="logsBody" style="overflow:auto;padding:12px 16px;font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text-soft);white-space:pre-wrap;word-break:break-word"></div>
+      <div id="logsBody" style="overflow:auto;padding:12px 16px;font:12.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text);white-space:pre-wrap;word-break:break-word"></div>
     </div>
     <script>
     /* Owner-only error-log viewer. Opens from the hamburger; fetches the server-gated /api/logs
@@ -442,19 +443,57 @@
           var msg = (e && e.message) ? e.message : '';
           return t + '  ' + src + ctx + '\n' + msg;
         }
-        function openLogs(){
+        // Round 4 Phase 3: movable + resizable Activity-log window; box (left/top/width/height) persisted
+      // across the suite in a companion parent-domain cookie (msuite_activity_log_box).
+      function writeBox(o){ try { document.cookie = 'msuite_activity_log_box=' + encodeURIComponent(JSON.stringify(o)) + '; domain=.isaiahsmithfilms.com; path=/; max-age=2592000; SameSite=Lax'; } catch(e){} }
+      function readBox(){ try { var parts = (document.cookie || '').split(';'); for (var i=0;i<parts.length;i++){ var p = parts[i].trim(); if (p.indexOf('msuite_activity_log_box=') === 0) return JSON.parse(decodeURIComponent(p.substring(('msuite_activity_log_box=').length))); } } catch(e){} return null; }
+      function clampBox(panel){ try { var w = panel.offsetWidth, h = panel.offsetHeight; var l = parseFloat(panel.style.left), t = parseFloat(panel.style.top); if (!isNaN(l)) panel.style.left = Math.max(8, Math.min(l, Math.max(8, window.innerWidth - w - 8))) + 'px'; if (!isNaN(t)) panel.style.top = Math.max(8, Math.min(t, Math.max(8, window.innerHeight - h - 8))) + 'px'; } catch(e){} }
+      function saveBox(panel){ try { if (panel.style.display !== 'flex') return; var l = parseFloat(panel.style.left), t = parseFloat(panel.style.top); if (isNaN(l) || isNaN(t)) { var r = panel.getBoundingClientRect(); l = r.left; t = r.top; } writeBox({ left: l, top: t, width: panel.offsetWidth, height: panel.offsetHeight }); } catch(e){} }
+      function applyLogBox(panel){ try { var b = readBox(); if (!b) return; panel.style.transform = 'none'; panel.style.right = 'auto'; panel.style.bottom = 'auto'; if (b.width) panel.style.width = b.width + 'px'; if (b.height) panel.style.height = b.height + 'px'; if (typeof b.left === 'number' && !isNaN(b.left)) panel.style.left = b.left + 'px'; if (typeof b.top === 'number' && !isNaN(b.top)) panel.style.top = b.top + 'px'; clampBox(panel); } catch(e){} }
+      function renderEntries(body, entries){ body.textContent = ''; for (var i=0;i<entries.length;i++){ var e = entries[i]; var t = (e && e.ts) ? e.ts : ''; var src = (e && e.source === 'client') ? 'CLIENT' : 'SERVER'; var ctx = (e && e.ctx) ? (' [' + e.ctx + ']') : ''; var msg = (e && e.message) ? e.message : ''; var wrap = document.createElement('div'); wrap.className = 'logentry'; var meta = document.createElement('div'); meta.className = 'logmeta'; meta.textContent = t + '  ' + src + ctx; var mm = document.createElement('div'); mm.className = 'logmsg'; mm.textContent = msg; wrap.appendChild(meta); wrap.appendChild(mm); body.appendChild(wrap); } }
+      function setupLogWindow(){
+        var panel = document.getElementById('logsPanel'), header = document.getElementById('logsHeader');
+        if (!panel || !header) return;
+        var dragging = false, sx = 0, sy = 0, sl = 0, st = 0;
+        function pt(e){ var t = (e.touches && e.touches[0]) || e; return { x: t.clientX, y: t.clientY }; }
+        function down(e){
+          if (e.target && e.target.closest && e.target.closest('button')) return;   // don't drag when tapping Copy all / X
+          var r = panel.getBoundingClientRect();
+          panel.style.left = r.left + 'px'; panel.style.top = r.top + 'px'; panel.style.transform = 'none'; panel.style.right = 'auto'; panel.style.bottom = 'auto';
+          var p = pt(e); dragging = true; sx = p.x; sy = p.y; sl = r.left; st = r.top;
+          document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+          document.addEventListener('touchmove', move, { passive: false }); document.addEventListener('touchend', up);
+          if (e.cancelable) e.preventDefault();
+        }
+        function move(e){
+          if (!dragging) return;
+          var p = pt(e), w = panel.offsetWidth, h = panel.offsetHeight;
+          var nl = sl + (p.x - sx), nt = st + (p.y - sy);
+          nl = Math.max(8, Math.min(nl, Math.max(8, window.innerWidth - w - 8)));
+          nt = Math.max(8, Math.min(nt, Math.max(8, window.innerHeight - h - 8)));
+          panel.style.left = nl + 'px'; panel.style.top = nt + 'px';
+          if (e.cancelable) e.preventDefault();
+        }
+        function up(){ dragging = false; document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); document.removeEventListener('touchmove', move); document.removeEventListener('touchend', up); saveBox(panel); }
+        header.addEventListener('mousedown', down);
+        header.addEventListener('touchstart', down, { passive: false });
+        try { if (window.ResizeObserver){ var tmr = null; var ro = new ResizeObserver(function(){ if (tmr) clearTimeout(tmr); tmr = setTimeout(function(){ saveBox(panel); }, 400); }); ro.observe(panel); } } catch(e){}
+        window.addEventListener('resize', function(){ if (panel.style.display === 'flex') clampBox(panel); });
+      }
+      
+      function openLogs(){
           var panel = document.getElementById('logsPanel'), body = document.getElementById('logsBody');
           if (!panel || !body) return;
-          panel.style.display = 'flex'; setLogPref('1'); body.textContent = 'Loading…'; lastText = '';
+          panel.style.display = 'flex'; setLogPref('1'); applyLogBox(panel); body.textContent = 'Loading…'; lastText = '';
           fetch('/api/logs').then(function(r){ return r.json().then(function(j){ return { ok:r.ok, j:j }; }); }).then(function(res){
             if (!res.ok){ body.textContent = (res.j && res.j.error) ? res.j.error : 'Could not load logs.'; return; }
             var entries = (res.j && res.j.entries) || [];
             if (!entries.length){ body.textContent = 'No recent activity.'; return; }
             lastText = entries.map(fmtEntry).join('\n\n');
-            body.textContent = lastText;
+            renderEntries(body, entries);
           }).catch(function(){ body.textContent = 'Could not load logs.'; });
         }
-        function setLogPref(v){ try { document.cookie = 'msuite_activity_log=' + v + '; domain=.isaiahsmithfilms.com; path=/; max-age=2592000; SameSite=Lax'; } catch(e){} } function getLogPref(){ try { var parts = (document.cookie || '').split(';'); for (var i=0;i<parts.length;i++){ var pp = parts[i].trim(); if (pp.indexOf('msuite_activity_log=') === 0) return pp.substring(('msuite_activity_log=').length); } } catch(e){} return ''; } if (getLogPref() === '1') { try { openLogs(); } catch(e){} } var item = document.getElementById('logsMenuItem');
+        function setLogPref(v){ try { document.cookie = 'msuite_activity_log=' + v + '; domain=.isaiahsmithfilms.com; path=/; max-age=2592000; SameSite=Lax'; } catch(e){} } function getLogPref(){ try { var parts = (document.cookie || '').split(';'); for (var i=0;i<parts.length;i++){ var pp = parts[i].trim(); if (pp.indexOf('msuite_activity_log=') === 0) return pp.substring(('msuite_activity_log=').length); } } catch(e){} return ''; } if (getLogPref() === '1') { try { openLogs(); } catch(e){} } try { setupLogWindow(); } catch(e){} var item = document.getElementById('logsMenuItem');
         if (item) item.addEventListener('click', function(){ var m = document.getElementById('fastMenu'); if (m) m.hidden = true; var p = document.getElementById('logsPanel'); if (p && p.style.display === 'flex') { p.style.display = 'none'; setLogPref('0'); return; } openLogs(); });
         var close = document.getElementById('logsCloseBtn');
         if (close) close.addEventListener('click', function(){ var p = document.getElementById('logsPanel'); if (p) p.style.display = 'none'; setLogPref('0'); });
@@ -1129,7 +1168,7 @@
 
     <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><div class="poBtns"><button type="button" class="poMode" id="poDockL" title="Dock left">Left</button><button type="button" class="poMode on" id="poFloat" title="Float">Float</button><button type="button" class="poMode" id="poDockR" title="Dock right">Right</button><button type="button" id="popoutClose" aria-label="Put preview back" title="Put back">×</button></div></div><div id="popoutGrip"></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot"><span class="foot-brand">Isaiah Smith Films</span> · Magic Marquee <span class="foot-ver">v3.47</span></div>
+    <div class="foot"><span class="foot-brand">Isaiah Smith Films</span> · Magic Marquee <span class="foot-ver">v3.48</span></div>
   </div>
 
   <script>

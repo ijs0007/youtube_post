@@ -16,6 +16,21 @@ Round 3 confirmed per-video comment enable/disable is **not settable via YouTube
 Verified: no leftover `optComments`/`getComments`/`opts.comments`/`const comments` refs; `node --check` server.js ✓
 + main inline `<script>` ✓; div-balanced (322/322); no dup IDs.
 
+**Phase 3 — Activity log is now a movable + resizable window with brighter message text (footer v3.47 → v3.48;
+front-end only).** Two changes to the Round-3 glass panel, committed together:
+- **3a movable + resizable:** the header (`#logsHeader`, `cursor:move`) drags via `mousedown`/`touchstart` →
+  `left`/`top` (centering transform cleared on first grab), **clamped to the viewport** (mouse **and** touch). Panel
+  gets CSS `resize:both` + `min 300×170` / `max 96vw×90vh` (desktop grip; iOS Safari has no CSS `resize` — drag
+  still works). **Position + size persist** across the suite in a companion cookie `msuite_activity_log_box`
+  (`.isaiahsmithfilms.com`, 30d) — applied on open, saved on drag-end + a debounced ResizeObserver.
+- **3b brighter text:** the log **message** now renders at the header's **solid white** (`var(--text)`); ts/source
+  stays dim (`var(--text-soft)`). **Decision (noted):** kept the "never innerHTML" posture — entries are built as
+  **DOM nodes via `textContent`** (bright `.logmsg` + dim `.logmeta`), still injection-safe.
+- **Preserved from Round 3:** ✕ close, hamburger toggle, `msuite_activity_log` cookie, Copy all, owner-gate,
+  secret-scrubbing.
+Verified in a Preview harness (drag/clamp/resize + message-color === title-color); `node --check` extracted
+`<script>` ✓; box-cookie round-trip 4/4; div-balanced; no dup IDs.
+
 ## Polish Round 3 (2026-07-01)
 
 **Phase 2 — How It Works "?" hamburger icon → accent color (footer v3.40 → v3.41).** The hamburger "How It
