@@ -1118,7 +1118,7 @@
 
     <div id="popoutPanel"><div id="popoutBar"><span>PREVIEW</span><div class="poBtns"><button type="button" class="poMode" id="poDockL" title="Dock left">Left</button><button type="button" class="poMode on" id="poFloat" title="Float">Float</button><button type="button" class="poMode" id="poDockR" title="Dock right">Right</button><button type="button" id="popoutClose" aria-label="Put preview back" title="Put back">×</button></div></div><div id="popoutGrip"></div><div id="popoutBody"></div></div>
     <div id="thumbLightbox" class="lightbox"><img id="lightboxImg" alt="Thumbnail preview"><span class="lightbox-x">×</span></div>
-    <div class="foot"><span class="foot-brand">Isaiah Smith Films</span> · Magic Marquee <span class="foot-ver">v3.39</span></div>
+    <div class="foot"><span class="foot-brand">Isaiah Smith Films</span> · Magic Marquee <span class="foot-ver">v3.40</span></div>
   </div>
 
   <script>
@@ -1702,6 +1702,11 @@
     }
 
     // R2 -> YouTube transfer + render the result card
+    // Shared with initUploadOptions() below, which assigns this once the Schedule toggle is bound.
+    // Declared here (not just inside initUploadOptions) so readUploadOpts()/scheduleError() — sibling
+    // top-level functions — see the SAME variable instead of an out-of-scope one that's always undefined
+    // (that was the bug: a schedule time was set in the UI but never reached the outgoing request).
+    var getSchedule;
     // Read the live Upload Options (privacy, category, tags, license, language) so they
     // ride along with the transfer. Defensive: any missing control just yields ''/default
     // and the server falls back to the safe private/category-1 behavior.
@@ -4993,7 +4998,7 @@
         flashT = setTimeout(function () { statusEl.textContent = ''; }, 1400);
       }
 
-      var getSchedule, getKids, getComments, getNotify, getEmbed;
+      var getKids, getComments, getNotify, getEmbed; // getSchedule is declared at the shared top-level scope above
       function save() {
         var data = {
           privacy: gv('optPrivacy', 'private'),

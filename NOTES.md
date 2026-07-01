@@ -1,5 +1,44 @@
 # Magic Marquee — handoff notes
 
+## Scheduled-upload fix — publishAt was never sent (2026-07-01) — footer v3.39 → v3.40, APP_VERSION 0.47 → 0.48
+
+**Root cause (confirmed, not guessed):** a JS scoping bug, not the sanitizer and not the force-private override —
+both of those were already correct. `getSchedule` (the Schedule toggle's state-getter, returned by `bindToggle()`)
+was declared with `var` **inside** `initUploadOptions()` only. `readUploadOpts()` and `scheduleError()` are
+sibling top-level functions in the same `<script>` block, but `var` is function-scoped — so their reference to
+`getSchedule` resolved to nothing (`typeof getSchedule === 'undefined'`), meaning `on` was **always `false`**.
+Result: `scheduleAt` was never attached to the `/api/transfer` payload, no matter what the user picked, and
+`scheduleError()`'s friendly past/missing-time validation never fired either. This is exactly why Studio showed
+Private with no scheduled time regardless of the dropdown — the schedule data never left the browser.
+
+**Fix (client, surgical):** moved `var getSchedule;` to the shared top-level scope (declared once, right before
+`readUploadOpts()`), and `initUploadOptions()` now **assigns** the existing outer variable instead of
+re-declaring a shadowing local (removed `getSchedule` from its own `var` list). `getKids`/`getComments`/
+`getNotify`/`getEmbed` untouched — they're only used inside `initUploadOptions()`'s own `save()`.
+- **🔵 Flagged, not fixed (out of scope):** those four toggles (kids/comments/notify/embeddable) are saved to
+  `localStorage` as device defaults but were **already** never read by `readUploadOpts()` or sent to
+  `/api/transfer`, and `sanitizeUploadOpts()`/`transferToYouTube()` never apply them either — so they're
+  currently dead UI, same class of gap as the old schedule/playlist one from Phase E, but separate from this
+  bug (they don't share `getSchedule`'s scoping issue) and outside this task's ask. Worth a future pass if
+  Isaiah wants "made for kids" / comments / notify / embeddable actually wired into the upload.
+- **Server-side (already correct, unchanged):** `sanitizeUploadOpts()` already allow-lists `scheduleAt`
+  (future-only, normalized to UTC ISO via `.toISOString()`), and `transferToYouTube()` already builds `status`
+  with the dropdown privacy first, then forces `privacyStatus:"private"` + attaches `publishAt` **after**, right
+  before `videos.insert` — correct order of operations, correct RFC 3339 UTC format. Nothing here needed a fix.
+- **Added a diagnostic log line** right before `videos.insert`: `console.log("[transfer] outgoing status ->
+  privacyStatus:", status.privacyStatus, "| publishAt:", status.publishAt || "(none)")` — not a secret, safe to
+  log. This will show the real outgoing values in the Render log on the next live test.
+- **Verified:** `node --check` ✓; inline scripts parse ✓; an isolated Node harness mirroring the exact scope
+  shape proves the fix (closed→no `scheduleAt`, toggled-on+future-time→`scheduleAt` present, toggled-off→gone
+  again); a server-logic harness re-confirms all 5 cases (public+future→forced private+publishAt, private+
+  future→private+publishAt, no-schedule→dropdown honored/no publishAt, past-time→ignored, garbage→ignored);
+  **live-verified in a real browser via Preview** — clicking the actual Schedule toggle + setting a real future
+  time in `#optScheduleAt` now produces `readUploadOpts().scheduleAt` as a valid ISO/RFC3339 UTC string
+  (previously always absent), `scheduleError()` now genuinely validates (previously always null), and toggling
+  off correctly removes `scheduleAt` again. `/api/transfer` still behaves exactly as before when unconfigured.
+- **🔵 Test scheduled upload after deploy; check Render log for the printed `publishAt`** — confirm YouTube
+  Studio now shows Private **with** a scheduled go-live time (not just Private), and that it flips Public on
+  its own at that time.
 ## Phase F log viewer — close (✕) fix + "Activity log" rename (2026-06-30) — footer v3.38 → v3.39, APP_VERSION 0.46 → 0.47
 
 **Fix (front-end only):** the log panel's `✕` was dead + the panel auto-opened, because `#logsPanel` had both

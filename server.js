@@ -42,7 +42,7 @@ import pg from "pg";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_VERSION = "0.47";
+const APP_VERSION = "0.48";
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -561,6 +561,8 @@ async function transferToYouTube(jobId, key, title, description, opts) {
     // (validated, future) schedule time is set we FORCE private — the video then auto-goes-public at that
     // time. No schedule set => privacy follows the dropdown exactly as before.
     if (o.scheduleAt) { status.publishAt = o.scheduleAt; status.privacyStatus = "private"; }
+    // Diagnostic: not a secret, safe to log — confirms exactly what's about to go out.
+    console.log("[transfer] outgoing status -> privacyStatus:", status.privacyStatus, "| publishAt:", status.publishAt || "(none)");
     const result = await youtube.videos.insert({
       part: ["snippet", "status"],
       requestBody: { snippet, status },
